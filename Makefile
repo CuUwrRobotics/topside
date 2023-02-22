@@ -1,25 +1,33 @@
 # @Author: Nick Steele <nichlock>
 # @Date:   21:46 Sep 18 2020
 # @Last modified by:   nichlock
-# @Last modified time: 19:01 Sep 19 2020
+# @Last modified time: 22 Feb, 2023
 
-PROJECT_NAME=joy_mapper
-NODE_NAME=joy_mapper_node
+CATKIN_MAKE=catkin_make
 
-CMD_CATKIN_MAKE=catkin_make
-CMD_ROSRUN=rosrun
+# Compiler setup
+# CXX=g++-8
+# CMAKE_CXX_ARG=-DCMAKE_CXX_COMPILER=$(CXX)
+
+# CC=gcc-8
+# CMAKE_CC_ARG=-DCMAKE_C_COMPILER=$(CC)
+
+# Debug symbols for debugging with GDB
 CMAKE_DEBUG_ARG=-DCMAKE_BUILD_TYPE=DEBUG
 
-.PHONY: all first debug clean run
+.PHONY: all first all-ignore-error debug clean
 
 all:
-	$(CMD_CATKIN_MAKE) $(CMAKE_CC_ARG) $(CMAKE_CXX_ARG)
+	$(CATKIN_MAKE) $(CMAKE_CC_ARG) $(CMAKE_CXX_ARG)
 
-run:
-	$(CMD_ROSRUN) $(PROJECT_NAME) $(NODE_NAME)
+# Sometimes it is necesary to make then clean then make again. This will do that.
+first: all-ignore-error clean all
+
+all-ignore-error:
+	-$(CATKIN_MAKE)
 
 debug:
-	$(CMD_CATKIN_MAKE) $(CMAKE_CC_ARG) $(CMAKE_CXX_ARG) $(CMAKE_DEBUG_ARG)
+	$(CATKIN_MAKE) $(CMAKE_CC_ARG) $(CMAKE_CXX_ARG) $(CMAKE_DEBUG_ARG)
 
 clean:
-	$(CMD_CATKIN_MAKE) clean
+	$(CATKIN_MAKE) clean
