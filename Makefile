@@ -20,12 +20,6 @@ CMAKE_DEBUG_ARG=-DCMAKE_BUILD_TYPE=DEBUG
 all:
 	$(CATKIN_MAKE) $(CMAKE_CC_ARG) $(CMAKE_CXX_ARG)
 
-# Sometimes it is necesary to make then clean then make again. This will do that.
-first: all-ignore-error clean all
-
-all-ignore-error:
-	-$(CATKIN_MAKE)
-
 debug:
 	$(CATKIN_MAKE) $(CMAKE_CC_ARG) $(CMAKE_CXX_ARG) $(CMAKE_DEBUG_ARG)
 
