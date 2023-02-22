@@ -1,0 +1,8 @@
+# @Author:             Nick Steele <nichlock>
+# @Date:               Oct 20 2022
+# @Last modified by:   nichlock
+# @Last modified time: Oct 20 2022
+
+# Disables all motion devices when true.
+bool lockout
+---
