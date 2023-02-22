@@ -3,6 +3,8 @@
 build/
 devel/
 
+src/CMakeLists.txt
+
 # Prerequisites
 *.d
 
