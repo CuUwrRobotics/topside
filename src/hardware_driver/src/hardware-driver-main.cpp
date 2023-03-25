@@ -89,8 +89,9 @@ int main(int argc, char *argv[])
           port = argv[arg + 1];
         }
       }
-      else if (strcmp(argv[arg], "-b") == 0) {
-        
+      else if (strcmp(argv[arg], "-b") == 0)
+      {
+
         if (argc < arg + 2)
         {
           ROS_WARN("-b specified, but no baud rate was given. Continuing with default rate %d.", baud);
@@ -145,12 +146,15 @@ void controlLoop(RovCommsController &rov_comms_controller, ros::Publisher &leak_
 {
   if (mode == MODE_COPI)
   {
+    ROS_DEBUG("Mode: COPI");
+
     for (int iter = 0; iter < ros_data::motor_throttles.size(); iter++)
       rov_comms_controller.send(ros_data::motor_throttles[iter]);
     rov_comms_controller.send(ros_data::switch_control);
     for (int iter = 0; iter < ros_data::motor_throttles.size(); iter++)
       rov_comms_controller.send(ros_data::servo_angles[iter]);
 
+    ROS_DEBUG("Entering mode: CIPO");
     mode = MODE_CIPO;
     next_ping_time = CREATE_DELAY(MAX_DELAY_SEC);
   } // if MODE_COPI
@@ -167,6 +171,12 @@ void controlLoop(RovCommsController &rov_comms_controller, ros::Publisher &leak_
     int read_len = rov_comms_controller.tryReadingData();
     if (read_len == -1)
     {
+      ROS_DEBUG("CIPO buffer ready");
+    
+    // Make sure there isn't any data remaining in the serial's hardware RX buffer
+    // Needed because the arduino will sometimes double-transmit, messing up the synchronization
+    serial::serialEmpty(rov_comms_controller.getFileDescriptor(), TCIFLUSH);
+
       // Reached the end of the read buffer
       if (rov_comms_controller.checksumGood())
       {
@@ -188,6 +198,8 @@ void controlLoop(RovCommsController &rov_comms_controller, ros::Publisher &leak_
 
   else if (mode == MODE_CIPO_SUCCESSFUL)
   {
+    ROS_DEBUG("MODE: CIPO_SUCCESSFUL");
+
     rov_comms_controller.resetReadBuffer();
     leak_msg.leaks = rov_comms_controller.popReadBuffer();
     leak_pub.publish(leak_msg);

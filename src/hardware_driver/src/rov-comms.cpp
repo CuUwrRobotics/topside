@@ -51,6 +51,7 @@ void RovCommsController::sendBlock(uint8_t data)
     this->sendChecksum();
     copi_index = 0;
   }
+
 }; // sendBlock
 
 void RovCommsController::sendBlocks(const uint8_t data[], size_t length)

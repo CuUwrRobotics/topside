@@ -39,6 +39,8 @@ public:
         read_buffer(cipo),
         serial_fd(ser){};
 
+  inline int getFileDescriptor() { return this->serial_fd; };
+
   /**
    * @brief Waits for the handshake with the ROV to complete.
    *
@@ -108,6 +110,8 @@ public:
     cipo_index = 0;
     cipo_checksum = 0;
     copi_checksum = 0;
+
+    serial::serialEmpty(serial_fd, TCIOFLUSH);
   }
 
   /**

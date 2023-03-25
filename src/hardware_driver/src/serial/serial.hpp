@@ -40,6 +40,11 @@ void serialFlush(const int fd);
 
 /**
  * @brief Empty the TX/RX buffers.
+ * 
+ * Modes:
+ *   - TCIFLUSH:  Discard any data recieved and not yet read by program.
+ *   - TCOFLUSH:  Discard any data written by program but not yet sent by hardware
+ *   - TCIOFLUSH: Discard both buffers.
  *
  */
 
