@@ -39,13 +39,14 @@ class LockoutStateMachine {
 
     switch (state) {
       case LOC_FREE:
-        if (*btn1 && *btn2) {
+        if (*btn1 || *btn2) {
           state = LOC_ENTER_LOCKED__HOLD;
-          stoptime = now + 0.1;  // Give a little time for debounce
+          stoptime = now + 0.05;  // Give a little time for debounce
         }
         break;
       case LOC_ENTER_LOCKED__HOLD:
-        if (!(*btn1 && *btn2)) {
+        if (!(*btn1 || *btn2)) {
+          // Buttons were released early
           state = LOC_FREE;
         }
         if (now >= stoptime) {
@@ -53,7 +54,7 @@ class LockoutStateMachine {
         }
         break;
       case LOC_ENTER_LOCKED__RELEASE:
-        if (!(*btn1 && *btn2)) {
+        if (!(*btn1 || *btn2)) {
           state = LOC_LOCKED;
         }
         break;

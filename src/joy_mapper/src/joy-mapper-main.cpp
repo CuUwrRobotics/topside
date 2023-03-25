@@ -19,7 +19,7 @@
               ^                              ^
               |                              |
               |                              |
-TURN LEFT<----+---->TURN RIGHT    ROLL  <----+----> ROLL
+TURN LEFT<----+---->TURN RIGHT    MOVE  <----+----> MOVE
               |                   LEFT       |     RIGHT
               |                              |
               v                              v
@@ -150,12 +150,13 @@ void pushUpdates() {
   trigger_motor_reset = btn_a;
 
   robot_motion_vector.z = pad_left.updown;
-  robot_motion_vector.x = stick_left.updown;
-  robot_motion_vector.roll = stick_right.leftright;
+  robot_motion_vector.x = -stick_left.updown;
+  robot_motion_vector.y = -stick_right.leftright;
+  robot_motion_vector.roll = pad_left.leftright;
   robot_motion_vector.pitch = stick_right.updown;
   robot_motion_vector.yaw = stick_left.leftright;
 
-  arm_position_vector.arm_joints[0] = pad_left.leftright;
+  // arm_position_vector.arm_joints[0] = pad_left.leftright;
 
   arm_position_vector.claw_open_close = btn_x ? 1 : (btn_y ? -1 : 0);
 
