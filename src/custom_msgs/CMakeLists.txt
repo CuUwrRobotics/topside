@@ -14,6 +14,8 @@ add_message_files(
   ArmJointMotion.msg
   MotorControls.msg
   Leak.msg
+  SwitchControls.msg
+  HBridgeControls.msg
 )
 
 add_service_files(

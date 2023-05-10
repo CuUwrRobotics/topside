@@ -8,6 +8,7 @@
 // #include <custom_msgs/MotorControls.h>
 #include <custom_msgs/Leak.h>
 #include <custom_msgs/EulerMotion.h>
+#include <std_msgs/Float32.h>
 #include <ros/ros.h>
 
 // Internal inclues
@@ -22,7 +23,7 @@
 /// Creates a delay in seconds
 #define CREATE_DELAY(a) (ros::Time::now() + ros::Duration(a))
 
-void controlLoop(RovCommsController &rov_comms_controller, ros::Publisher &leak_pub, ros::Publisher &motion_pub);
+void controlLoop(RovCommsController &rov_comms_controller, ros::Publisher &leak_pub, ros::Publisher &motion_pub, ros::Publisher &);
 
 const static float MAX_DELAY_SEC = 0.2;
 
@@ -35,7 +36,7 @@ std::array<uint8_t, 6> ros_data::servo_angles;
 uint8_t MPU_DATA_BYTES = (14);
 
 uint8_t COPI_BUFFER_LENGTH = ((2 * ros_data::motor_throttles.size()) + 1 + ros_data::servo_angles.size());
-uint8_t CIPO_BUFFER_LENGTH = (1 + MPU_DATA_BYTES);
+uint8_t CIPO_BUFFER_LENGTH = (1 + MPU_DATA_BYTES + sizeof(float));
 
 custom_msgs::Leak leak_msg;
 custom_msgs::EulerMotion accel_gyro_readings;
@@ -59,9 +60,14 @@ int main(int argc, char *argv[])
   ros::init(argc, argv, "hardware_driver");
   ros::NodeHandle node;
   ros::Subscriber motor_sub = node.subscribe<custom_msgs::MotorControls>("hardware/main_motors", 1, &motionMotorSubCallback);
+  ros::Subscriber servo_sub = node.subscribe<custom_msgs::MotorControls>("hardware/servo_motors", 1, &servoSubCallback);
+  ros::Subscriber switch_sub = node.subscribe<custom_msgs::SwitchControls>("hardware/switch_controls", 1, &switchesSubCallback);
+  ros::Subscriber hbridge_sub = node.subscribe<custom_msgs::HBridgeControls>("hardware/h_bridge_controls", 1, &hBridgeSubCallback);
 
   ros::Publisher leak_pub = node.advertise<custom_msgs::Leak>("hardware/leak_sensors", 1);
   ros::Publisher motion_pub = node.advertise<custom_msgs::EulerMotion>("hardware/motion", 1);
+
+  ros::Publisher depth_pub = node.advertise<std_msgs::Float32>("hardware/depth", 1);
 
   std::string port = "/dev/ttyUSB0";
   int baud = 2000000;
@@ -127,7 +133,7 @@ int main(int argc, char *argv[])
   {
     ros::spinOnce();
 
-    controlLoop(rov_comms_controller, leak_pub, motion_pub);
+    controlLoop(rov_comms_controller, leak_pub, motion_pub, depth_pub);
   } // while ros::ok
 }
 
@@ -142,7 +148,7 @@ void softReset(RovCommsController &rov_comms_controller)
   last_read_len = 0;
 }
 
-void controlLoop(RovCommsController &rov_comms_controller, ros::Publisher &leak_pub, ros::Publisher &motion_pub)
+void controlLoop(RovCommsController &rov_comms_controller, ros::Publisher &leak_pub, ros::Publisher &motion_pub, ros::Publisher &depth_pub)
 {
   if (mode == MODE_COPI)
   {
@@ -172,10 +178,10 @@ void controlLoop(RovCommsController &rov_comms_controller, ros::Publisher &leak_
     if (read_len == -1)
     {
       ROS_DEBUG("CIPO buffer ready");
-    
-    // Make sure there isn't any data remaining in the serial's hardware RX buffer
-    // Needed because the arduino will sometimes double-transmit, messing up the synchronization
-    serial::serialEmpty(rov_comms_controller.getFileDescriptor(), TCIFLUSH);
+
+      // Make sure there isn't any data remaining in the serial's hardware RX buffer
+      // Needed because the arduino will sometimes double-transmit, messing up the synchronization
+      serial::serialEmpty(rov_comms_controller.getFileDescriptor(), TCIFLUSH);
 
       // Reached the end of the read buffer
       if (rov_comms_controller.checksumGood())
@@ -206,6 +212,11 @@ void controlLoop(RovCommsController &rov_comms_controller, ros::Publisher &leak_
 
     uint8_t *data = rov_comms_controller.popReadBuffer(14);
     motion_pub.publish(processMpu6050Data(data));
+
+    float depth = rov_comms_controller.popReadBuffer<float>();
+    std_msgs::Float32 depth_msg;
+    depth_msg.data = depth;
+    depth_pub.publish(depth_msg);
 
     mode = MODE_COPI;
   } // if MODE_CIPO_SUCCESSFUL

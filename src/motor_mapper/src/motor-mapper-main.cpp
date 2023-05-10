@@ -15,11 +15,21 @@
 #include "motor-mapper-main.hpp"
 
 // Tau is the time (in seconds) to go from 0-100% throttle
-#define VERTICAL_ACCELERATION_TAU 2
-#define HORIZONTAL_MOTOR_ACCELERATION_TAU 0.5
+#define VERTICAL_ACCELERATION_TAU 1
+#define HORIZONTAL_MOTOR_ACCELERATION_TAU 1.5
+// #define VERTICAL_ACCELERATION_TAU 0.01
+// #define HORIZONTAL_MOTOR_ACCELERATION_TAU 0.01
 
-#define VERTICAL_THROTTLE 0.75
+#define VERTICAL_THROTTLE 0.3
 #define HORIZONTAL_MOTOR_THROTTLE 0.5
+
+std::array<std::array<float, 2>, 6> motor_throttle_limits = {
+    std::array<float, 2>({-1, 1}),
+    std::array<float, 2>({-1, 1}),
+    std::array<float, 2>({-1, 1}),
+    std::array<float, 2>({-1, 1}),
+    std::array<float, 2>({-1, 1}),
+    std::array<float, 2>({-1, 1})};
 
 const static int MOTOR_THROTTLE_ZERO = 1500;
 const static int MOTOR_THROTTLE_DELTA = 500;
@@ -76,10 +86,9 @@ void setMotorValues()
   if (!recieved_motion_data_yet)
     return;
 
-  float throttle;
-
   for (int i = 0; i < Kmotors_length; i++)
   {
+    float throttle;
     // Compute throttles using desired motion and known motor positions
     throttle = motors[i].dir.x * robot_motion_vector.x;
     throttle += motors[i].dir.y * robot_motion_vector.y;
@@ -95,30 +104,19 @@ void setMotorValues()
       throttle = motors[i].accelerator->getNextValue(throttle);
     }
 
-    // Perform min/max limiting
-    if (throttle > 1)
-      throttle = 1;
-    if (throttle < -1)
-      throttle = -1;
-
     // Scale throttle to imposed limit
     throttle *= motors[i].power_limit;
 
-    // if (motors[i].accelerator != nullptr) {
-    //   // Update what the accelerators think the value is to avoid overflows
-    //   motors[i].accelerator->fillMemory(throttle);
-    // }
+    // Perform min/max limiting
+    throttle = std::min(throttle, motor_throttle_limits[i][1]);
+    throttle = std::max(throttle, motor_throttle_limits[i][0]);
 
     uint16_t set_throttle = (throttle * motors[i].set_delta) + motors[i].set_zero;
 
-    // Only sends message when a change actually occured
-    if (motors_message.motor_throttles[i] != set_throttle)
-    {
-      // Pack the final throttle into the message data
-      motors_message.motor_throttles[i] = set_throttle;
-      motor_update_flag = true;
-    }
+    // Pack the final throttle into the message data
+    motors_message.motor_throttles[i] = set_throttle;
   }
+  motor_update_flag = true;
 }
 
 void initMotors()
@@ -135,77 +133,153 @@ void initMotors()
   //   motors[i].power_limit = 1;
   //   motors[i].type = MT_ESC;
   // }
-  
+
   using std::cos;
   using std::sin;
 
-  motors[0].dir.x = 0;
-  motors[0].dir.y = 0;
-  motors[0].dir.z = 1;
-  motors[0].angle.r = -1;
-  motors[0].angle.p = +1;
-  motors[0].angle.y = -1;
+  // double M0_SIGN = 1;
+  // motors[0].dir.x = M0_SIGN * -1;
+  // motors[0].dir.y = M0_SIGN * -1;
+  // motors[0].dir.z = M0_SIGN * 0;
+  // motors[0].angle.r = M0_SIGN * 0;
+  // motors[0].angle.p = M0_SIGN * 0;
+  // motors[0].angle.y = M0_SIGN * -1;
+  // motors[0].set_zero = MOTOR_THROTTLE_ZERO;
+  // motors[0].set_delta = MOTOR_THROTTLE_DELTA;
+  // motors[0].power_limit = HORIZONTAL_MOTOR_THROTTLE;
+  // motors[0].accelerator = new acceleration::DerivativeLimiter(HORIZONTAL_MOTOR_ACCELERATION_TAU);
+
+  // double M1_SIGN = +1;
+  // motors[1].dir.x = M1_SIGN * -1;
+  // motors[1].dir.y = M1_SIGN * +1;
+  // motors[1].dir.z = M1_SIGN * 0;
+  // motors[1].angle.r = M1_SIGN * 0;
+  // motors[1].angle.p = M1_SIGN * 0;
+  // motors[1].angle.y = M1_SIGN * +1;
+  // motors[1].set_zero = MOTOR_THROTTLE_ZERO;
+  // motors[1].set_delta = MOTOR_THROTTLE_DELTA;
+  // motors[1].power_limit = HORIZONTAL_MOTOR_THROTTLE;
+  // motors[1].accelerator = new acceleration::DerivativeLimiter(HORIZONTAL_MOTOR_ACCELERATION_TAU);
+
+  // double M2_SIGN = +1;
+  // motors[2].dir.x = M2_SIGN * -1;
+  // motors[2].dir.y = M2_SIGN * -1;
+  // motors[2].dir.z = M2_SIGN * 0;
+  // motors[2].angle.r = M2_SIGN * 0;
+  // motors[2].angle.p = M2_SIGN * 0;
+  // motors[2].angle.y = M2_SIGN * +1;
+  // motors[2].set_zero = MOTOR_THROTTLE_ZERO;
+  // motors[2].set_delta = MOTOR_THROTTLE_DELTA;
+  // motors[2].power_limit = HORIZONTAL_MOTOR_THROTTLE;
+  // motors[2].accelerator = new acceleration::DerivativeLimiter(HORIZONTAL_MOTOR_ACCELERATION_TAU);
+
+  // double M3_SIGN = 1;
+  // motors[3].dir.x = M3_SIGN * -1;
+  // motors[3].dir.y = M3_SIGN * +1;
+  // motors[3].dir.z = M3_SIGN * 0;
+  // motors[3].angle.r = M3_SIGN * 0;
+  // motors[3].angle.p = M3_SIGN * 0;
+  // motors[3].angle.y = M3_SIGN * -1;
+  // motors[3].set_zero = MOTOR_THROTTLE_ZERO;
+  // motors[3].set_delta = MOTOR_THROTTLE_DELTA;
+  // motors[3].power_limit = HORIZONTAL_MOTOR_THROTTLE;
+  // motors[3].accelerator = new acceleration::DerivativeLimiter(HORIZONTAL_MOTOR_ACCELERATION_TAU);
+
+  // double M4_SIGN = +1;
+  // motors[4].dir.y = M4_SIGN * 0;
+  // motors[4].dir.x = M4_SIGN * 0;
+  // motors[4].dir.z = M4_SIGN * +1;
+  // motors[4].angle.r = M4_SIGN * +1;
+  // motors[4].angle.p = M4_SIGN * 0;
+  // motors[4].angle.y = M4_SIGN * 0;
+  // motors[4].set_zero = MOTOR_THROTTLE_ZERO;
+  // motors[4].set_delta = MOTOR_THROTTLE_DELTA;
+  // motors[4].power_limit = VERTICAL_THROTTLE;
+  // motors[4].accelerator = new acceleration::Holder(new acceleration::DerivativeLimiter(VERTICAL_ACCELERATION_TAU));
+
+  // double M5_SIGN = -1;
+  // motors[5].dir.x = M5_SIGN * 0;
+  // motors[5].dir.y = M5_SIGN * 0;
+  // motors[5].dir.z = M5_SIGN * +1;
+  // motors[5].angle.r = M5_SIGN * -1;
+  // motors[5].angle.p = M5_SIGN * 0;
+  // motors[5].angle.y = M5_SIGN * 0;
+  // motors[5].set_zero = MOTOR_THROTTLE_ZERO;
+  // motors[5].set_delta = MOTOR_THROTTLE_DELTA;
+  // motors[5].power_limit = VERTICAL_THROTTLE;
+  // motors[5].accelerator = new acceleration::Holder(new acceleration::DerivativeLimiter(VERTICAL_ACCELERATION_TAU));
+
+  double M0_SIGN = -1;
+  motors[0].dir.x = M0_SIGN * 0;
+  motors[0].dir.y = M0_SIGN * 0;
+  motors[0].dir.z = M0_SIGN * 1;
+  motors[0].angle.r = M0_SIGN * -1;
+  motors[0].angle.p = M0_SIGN * +1;
+  motors[0].angle.y = M0_SIGN * 0;
   motors[0].set_zero = MOTOR_THROTTLE_ZERO;
   motors[0].set_delta = MOTOR_THROTTLE_DELTA;
-  motors[0].power_limit = HORIZONTAL_MOTOR_THROTTLE;
-  motors[0].accelerator = new acceleration::DerivativeLimiter(HORIZONTAL_MOTOR_ACCELERATION_TAU);
-  
-  // M! REVERSED
-  motors[1].dir.x = 0;
-  motors[1].dir.y = 0;
-  motors[1].dir.z = -1; // +1
-  motors[1].angle.r = -1; // +1
-  motors[1].angle.p = -1; // +1
-  motors[1].angle.y = -1; // +1
+  motors[0].power_limit = VERTICAL_THROTTLE;
+  motors[0].accelerator = new acceleration::DerivativeLimiter(VERTICAL_ACCELERATION_TAU);
+
+  double M1_SIGN = +1;
+  motors[1].dir.x = M1_SIGN * 0;
+  motors[1].dir.y = M1_SIGN * 0;
+  motors[1].dir.z = M1_SIGN * 1;
+  motors[1].angle.r = M1_SIGN * +1;
+  motors[1].angle.p = M1_SIGN * +1;
+  motors[1].angle.y = M1_SIGN * 0;
   motors[1].set_zero = MOTOR_THROTTLE_ZERO;
   motors[1].set_delta = MOTOR_THROTTLE_DELTA;
-  motors[1].power_limit = HORIZONTAL_MOTOR_THROTTLE;
-  motors[1].accelerator = new acceleration::DerivativeLimiter(HORIZONTAL_MOTOR_ACCELERATION_TAU);
+  motors[1].power_limit = VERTICAL_THROTTLE;
+  motors[1].accelerator = new acceleration::DerivativeLimiter(VERTICAL_ACCELERATION_TAU);
 
-  motors[2].dir.x = 0;
-  motors[2].dir.y = 0;
-  motors[2].dir.z = 1;
-  motors[2].angle.r = +1;
-  motors[2].angle.p = -1;
-  motors[2].angle.y = -1;
+  double M2_SIGN = -1;
+  motors[2].dir.x = M2_SIGN * 0;
+  motors[2].dir.y = M2_SIGN * 0;
+  motors[2].dir.z = M2_SIGN * 1;
+  motors[2].angle.r = M2_SIGN * +1;
+  motors[2].angle.p = M2_SIGN * -1;
+  motors[2].angle.y = M2_SIGN * 0;
   motors[2].set_zero = MOTOR_THROTTLE_ZERO;
   motors[2].set_delta = MOTOR_THROTTLE_DELTA;
-  motors[2].power_limit = HORIZONTAL_MOTOR_THROTTLE;
-  motors[2].accelerator = new acceleration::DerivativeLimiter(HORIZONTAL_MOTOR_ACCELERATION_TAU);
+  motors[2].power_limit = VERTICAL_THROTTLE;
+  motors[2].accelerator = new acceleration::DerivativeLimiter(VERTICAL_ACCELERATION_TAU);
 
-  // MOTOR 3 IS BACKWARDS
-  motors[3].dir.x = 0;
-  motors[3].dir.y = 0;
-  motors[3].dir.z = 1;
-  motors[3].angle.r = +1; // -1;
-  motors[3].angle.p = +1; // -1;
-  motors[3].angle.y = -1; // +1;
+  double M3_SIGN = 1;
+  motors[3].dir.x = M3_SIGN * 0;
+  motors[3].dir.y = M3_SIGN * 0;
+  motors[3].dir.z = M3_SIGN * 1;
+  motors[3].angle.r = M3_SIGN * -1;
+  motors[3].angle.p = M3_SIGN * -1;
+  motors[3].angle.y = M3_SIGN * 0;
   motors[3].set_zero = MOTOR_THROTTLE_ZERO;
   motors[3].set_delta = MOTOR_THROTTLE_DELTA;
-  motors[3].power_limit = HORIZONTAL_MOTOR_THROTTLE;
-  motors[3].accelerator = new acceleration::DerivativeLimiter(HORIZONTAL_MOTOR_ACCELERATION_TAU);
+  motors[3].power_limit = VERTICAL_THROTTLE;
+  motors[3].accelerator = new acceleration::DerivativeLimiter(VERTICAL_ACCELERATION_TAU);
 
-  motors[4].dir.y = 0;
-  motors[4].dir.x = 0;
-  motors[4].dir.z = 0;
-  motors[4].angle.r = 0;
-  motors[4].angle.p = 0;
-  motors[4].angle.y = 0;
+  double M4_SIGN = +1;
+  motors[4].dir.x = M4_SIGN * -1;
+  motors[4].dir.y = M4_SIGN * -1;
+  motors[4].dir.z = M4_SIGN * 0;
+  motors[4].angle.r = M4_SIGN * 0;
+  motors[4].angle.p = M4_SIGN * 0;
+  motors[4].angle.y = M4_SIGN * +1;
   motors[4].set_zero = MOTOR_THROTTLE_ZERO;
   motors[4].set_delta = MOTOR_THROTTLE_DELTA;
-  motors[4].power_limit = VERTICAL_THROTTLE;
-  motors[4].accelerator = new acceleration::Holder(new acceleration::DerivativeLimiter(VERTICAL_ACCELERATION_TAU));
+  motors[4].power_limit = HORIZONTAL_MOTOR_THROTTLE;
+  motors[4].accelerator = new acceleration::DerivativeLimiter(HORIZONTAL_MOTOR_ACCELERATION_TAU);
 
-  motors[5].dir.x = 0;
-  motors[5].dir.y = 0;
-  motors[5].dir.z = 0;
-  motors[5].angle.r = 0;
-  motors[5].angle.p = 0;
-  motors[5].angle.y = 0;
+  double M5_SIGN = -1;
+  motors[5].dir.x = M5_SIGN * -1;
+  motors[5].dir.y = M5_SIGN * +1;
+  motors[5].dir.z = M5_SIGN * 0;
+  motors[5].angle.r = M5_SIGN * 0;
+  motors[5].angle.p = M5_SIGN * 0;
+  motors[5].angle.y = M5_SIGN * -1;
   motors[5].set_zero = MOTOR_THROTTLE_ZERO;
   motors[5].set_delta = MOTOR_THROTTLE_DELTA;
-  motors[5].power_limit = VERTICAL_THROTTLE;
-  motors[5].accelerator = new acceleration::Holder(new acceleration::DerivativeLimiter(VERTICAL_ACCELERATION_TAU));
+  motors[5].power_limit = HORIZONTAL_MOTOR_THROTTLE;
+  motors[5].accelerator = new acceleration::DerivativeLimiter(HORIZONTAL_MOTOR_ACCELERATION_TAU);
 }
 
 int main(int argc, char *argv[])
@@ -220,7 +294,7 @@ int main(int argc, char *argv[])
   ros::ServiceServer reset_service;
   ros::ServiceServer lockout_service;
 
-  joy_sub = node.subscribe<custom_msgs::EulerMotion>("robot_motion/controller_input", 1, &motionCmdCallback);
+  joy_sub = node.subscribe<custom_msgs::EulerMotion>("robot_motion/control_loop_output", 1, &motionCmdCallback);
 
   motor_pub = node.advertise<custom_msgs::MotorControls>("hardware/main_motors", 1);
 

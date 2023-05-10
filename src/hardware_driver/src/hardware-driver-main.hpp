@@ -2,6 +2,8 @@
 #define HARDWARE_DRIVER_HPP
 
 #include <custom_msgs/MotorControls.h>
+#include <custom_msgs/SwitchControls.h>
+#include <custom_msgs/HBridgeControls.h>
 
 #include <array>
 

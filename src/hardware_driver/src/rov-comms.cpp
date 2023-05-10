@@ -7,21 +7,35 @@ void RovCommsController::awaitHandshake()
 
   ROS_INFO("Attempting Handshake using 0x%02x", COMMS_HANDSHAKE);
 
-  while (!serial::serialDataAvail(serial_fd) && ros::ok())
+  while ((serial::serialDataAvail(serial_fd) == 0) && ros::ok())
   {
+    // Try sending the handshake commmand
+    // NOTE: This is doing double duty, since it's also what clears the
+    // arduino's serial buffer if it's waiting for data in COPI mode
+    printf(".");
+    fflush(stdout);
     serial::serialPutchar(serial_fd, COMMS_HANDSHAKE);
     serial::serialFlush(serial_fd);
-    ros::Duration(0.01).sleep();
+
+    // I chose 50ms since the timestamp does a roundtrip within about 20ms.
+    ros::Duration(0.1).sleep();
   }
+  printf("\n");
 
   uint32_t timestamp = 0;
 
   for (int i = 0; i < 4 && ros::ok(); i++)
   {
-    while (!serial::serialDataAvail(serial_fd) && ros::ok())
+    while ((serial::serialDataAvail(serial_fd) == 0) && ros::ok())
       ; // Wait for more data
     timestamp |= serial::serialGetchar(serial_fd) << (i * 8);
   }
+
+  if (!ros::ok())
+  {
+    throw std::runtime_error("ros::ok() false while awaiting handshake.");
+  }
+
   for (int i = 0; i < 4; i++)
   {
     serial::serialPutchar(serial_fd, (timestamp >> (i * 8)) & 0xFF);
@@ -79,8 +93,9 @@ int RovCommsController::tryReadingData()
     {
       // We've read the entire buffer, verify the checksum
       cipo_checksum_status = (cipo_checksum == data);
-
-      ROS_DEBUG("Read checksum 0x%02X (expected 0x%02X)", data, cipo_checksum);
+      
+      if (!cipo_checksum_status)
+        ROS_INFO("FAILED: Read checksum 0x%02X (expected 0x%02X)", data, cipo_checksum);
 
       cipo_index = 0;
       cipo_checksum = 0;
