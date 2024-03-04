@@ -182,7 +182,7 @@ void pushUpdates()
   switch_cmd_msg.value = btn_b;
 
   // arm_position_vector_dbl[0] += (tl - tr) * 0.1;                    // Lift Motor
-  // arm_position_vector_dbl[1] += (bumper_left - bumper_right) * 0.1; // Wrist Motor
+  arm_position_vector_dbl[1] += (bumper_left - bumper_right) * 0.1; // Wrist Motor
   // arm_position_vector_dbl[2] += (btn_x - btn_y) * 0.1;              // Claw Motor
 
   // auto clip = [] (double x, double min, double max) -> double { return x > max ? (max) : (x < min ? min: x); };
