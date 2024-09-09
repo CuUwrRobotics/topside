@@ -4,72 +4,82 @@
 #include <stdio.h>
 
 #include <algorithm>
+#include <functional>
 #include <numeric>
 #include <vector>
-#include <functional>
 
 class pid
 {
-private:
-  const double _max;
-  const double _min;
-  const double _Kp;
-  const double _Kd;
-  const double _Ki;
-  double _pre_error;
-  double _integral;
+  private:
+    const double _max;
+    const double _min;
+    const double _Kp;
+    const double _Kd;
+    const double _Ki;
+    double       _pre_error;
+    double       _integral;
 
-public:
-  pid(double Kp, double Ki, double Kd, double max = 1, double min = -1)
-      : _max(max),
-        _min(min),
-        _Kp(Kp),
-        _Kd(Kd),
-        _Ki(Ki),
-        _pre_error(0),
-        _integral(0)
-  {
-  }
-  /**
-   * @brief Run the PID control loop.
-   *
-   * @param
-   */
-  double tick(double current, double desired, double dt, bool print=false)
-  {
-    // Calculate error
-    const double error = desired - current;
-
-    // Proportional term
-    const double Pout = _Kp * error;
-
-    // Integral term
-    _integral += error * dt;
-    const double Iout = _Ki * _integral;
-    // Also restrict integral to prevent growth after it saturates
-    _integral = std::max(_integral, _min);
-    _integral = std::min(_integral, _max);
-
-    // Derivative term
-    const double derivative = (error - _pre_error) / dt;
-    const double Dout = _Kd * derivative;
-
-    // Calculate total output
-    double output = Pout + Iout + Dout;
-
-    if (print) {
-      ROS_INFO("e = %10.3f: P(%6.3f): %6.3f, I(%6.3f): %6.3f, D(%6.3f): %6.3f", error, _Kp, Pout, _Ki, Iout, _Kd, Dout);
+  public:
+    pid(double Kp, double Ki, double Kd, double max = 1, double min = -1)
+        : _max(max),
+          _min(min),
+          _Kp(Kp),
+          _Kd(Kd),
+          _Ki(Ki),
+          _pre_error(0),
+          _integral(0)
+    {
     }
 
-    // Restrict to max/min
-    output = std::max(output, _min);
-    output = std::min(output, _max);
+    /**
+     * @brief Run the PID control loop.
+     *
+     * @param
+     */
+    double tick(double current, double desired, double dt, bool print = false)
+    {
+        // Calculate error
+        const double error = desired - current;
 
-    // Save error to previous error
-    _pre_error = error;
+        // Proportional term
+        const double Pout = _Kp * error;
 
-    return output;
-  }
+        // Integral term
+        _integral         += error * dt;
+        const double Iout  = _Ki * _integral;
+        // Also restrict integral to prevent growth after it saturates
+        _integral          = std::max(_integral, _min);
+        _integral          = std::min(_integral, _max);
+
+        // Derivative term
+        const double derivative = (error - _pre_error) / dt;
+        const double Dout       = _Kd * derivative;
+
+        // Calculate total output
+        double output = Pout + Iout + Dout;
+
+        if (print)
+        {
+            ROS_INFO(
+                "e = %10.3f: P(%6.3f): %6.3f, I(%6.3f): %6.3f, D(%6.3f): %6.3f",
+                error,
+                _Kp,
+                Pout,
+                _Ki,
+                Iout,
+                _Kd,
+                Dout);
+        }
+
+        // Restrict to max/min
+        output = std::max(output, _min);
+        output = std::min(output, _max);
+
+        // Save error to previous error
+        _pre_error = error;
+
+        return output;
+    }
 };
 
 // // class IIRFilter

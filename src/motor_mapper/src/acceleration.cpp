@@ -2,7 +2,7 @@
 
 #include <errno.h>
 #include <string.h>
-namespace acceleration {
+namespace acceleration
+{
 
-};  // namespace acceleration
-
+}; // namespace acceleration

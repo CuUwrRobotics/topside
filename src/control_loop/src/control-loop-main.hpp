@@ -2,7 +2,8 @@
 #define MOTOR_MAPPER_MAIN
 
 /**
- * @brief A class implementing a filter which removes the DC component of a signal.
+ * @brief A class implementing a filter which removes the DC component of a
+ * signal.
  *
  * The DC Blocker will remove the DC component of a signal. One class instance
  * must exist per signal.
@@ -56,40 +57,44 @@
  *
  * For more information, see:
  *
- * - Practical info, tests, and implementation: https://ccrma.stanford.edu/~jos/fp/DC_Blocker.html
- * - Theory: http://dspguru.com/dsp/tricks/fixed-point-dc-blocking-filter-with-noise-shaping/
+ * - Practical info, tests, and implementation:
+ * https://ccrma.stanford.edu/~jos/fp/DC_Blocker.html
+ * - Theory:
+ * http://dspguru.com/dsp/tricks/fixed-point-dc-blocking-filter-with-noise-shaping/
  */
 class DcBlockingFilter
 {
-private:
-  double r;
-  double prev_x, prev_y;
+  private:
+    double r;
+    double prev_x, prev_y;
 
-public:
-  /**
-   * @brief Construct a new DC Blocking Filter object.
-   *
-   * @param r_val The Coefficient of the filter. See class description for more info.
-   */
-  DcBlockingFilter(double r_val)
-  {
-    this->r = r_val;
-    prev_x = 0;
-    prev_y = 0;
-  }
-  /**
-   * @brief Filter a single sample.
-   *
-   * @param x The input sample.
-   * @return double The filtered sample.
-   */
-  double filter(double x)
-  {
-    double y = x - prev_x + r * prev_y;
-    prev_x = x;
-    prev_y = y;
-    return y;
-  }
+  public:
+    /**
+     * @brief Construct a new DC Blocking Filter object.
+     *
+     * @param r_val The Coefficient of the filter. See class description for
+     * more info.
+     */
+    DcBlockingFilter(double r_val)
+    {
+        this->r = r_val;
+        prev_x  = 0;
+        prev_y  = 0;
+    }
+
+    /**
+     * @brief Filter a single sample.
+     *
+     * @param x The input sample.
+     * @return double The filtered sample.
+     */
+    double filter(double x)
+    {
+        double y = x - prev_x + r * prev_y;
+        prev_x   = x;
+        prev_y   = y;
+        return y;
+    }
 };
 
 #endif /* end of include guard: MOTOR_MAPPER_MAIN */

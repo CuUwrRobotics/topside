@@ -1,159 +1,166 @@
 #ifndef ROV_COMMS_CONTROLLER_HPP
 #define ROV_COMMS_CONTROLLER_HPP
 
-#include <stdint.h>
-#include <ros/ros.h>
-#include <stdio.h>
+#include <cstdint>
+#include <cstdio>
+#include <vector>
 
-#include "serial/serial.hpp"
+#include <ros/ros.h>
+
 #include "hardware-driver-main.hpp"
+#include "serial/serial.hpp"
 
 class RovCommsController
 {
-  const uint8_t COMMS_HANDSHAKE, CIPO_BUFFER_LENGTH, COPI_BUFFER_LENGTH;
+  private:
+    const std::uint8_t COMMS_HANDSHAKE;
+    const std::uint8_t CIPO_BUFFER_LENGTH;
+    const std::uint8_t COPI_BUFFER_LENGTH;
 
-  uint8_t cipo_checksum, copi_checksum;
+    std::uint8_t              m_CipoChecksum         = 0;
+    std::uint8_t              m_CopiChecksum         = 0;
+    std::uint8_t              m_CopiIndex            = 0;
+    std::uint8_t              m_CipoIndex            = 0;
+    std::uint8_t              m_ReadBufferIndex      = 0;
+    bool                      m_CipoChecksumStatus   = false;
+    std::vector<std::uint8_t> m_ReadBuffer           = {};
+    int                       m_SerialFileDescriptor = -1;
 
-  uint8_t copi_index, cipo_index;
+    void sendChecksum();
 
-  uint8_t read_buffer_index;
-  bool cipo_checksum_status;
+  public:
+    RovCommsController(const int          ser,
+                       const std::uint8_t cipo,
+                       const std::uint8_t copi)
+        : COMMS_HANDSHAKE((cipo * copi) & 0xFF),
+          CIPO_BUFFER_LENGTH(cipo),
+          COPI_BUFFER_LENGTH(copi),
+          cipo_checksum(0),
+          copi_checksum(0),
+          copi_index(0),
+          cipo_index(0),
+          read_buffer_index(0),
+          cipo_checksum_status(false),
+          read_buffer(cipo),
+          m_SerialFileDescriptor(ser) {};
 
-  std::vector<uint8_t> read_buffer;
+    inline int getFileDescriptor() { return m_SerialFileDescriptor; };
 
-  int serial_fd;
+    /**
+     * @brief Waits for the handshake with the ROV to complete.
+     *
+     * @details This function blocks until the handshake is complete. It is not
+     * aware of whether the handshake was successful or not according to the
+     * ROV.
+     */
+    void awaitHandshake();
 
-  void sendChecksum();
+    /**
+     * @brief Sends a block of data to the ROV.
+     *
+     * If the final block of data is being sent, the checksum is also sent.
+     *
+     * @param data The data to send.
+     */
+    void sendBlock(const std::uint8_t data);
 
-public:
-  RovCommsController(int ser, uint8_t cipo, uint8_t copi)
-      : COMMS_HANDSHAKE((cipo * copi) & 0xFF),
-        CIPO_BUFFER_LENGTH(cipo),
-        COPI_BUFFER_LENGTH(copi),
-        cipo_checksum(0),
-        copi_checksum(0),
-        copi_index(0),
-        cipo_index(0),
-        read_buffer_index(0),
-        cipo_checksum_status(false),
-        read_buffer(cipo),
-        serial_fd(ser){};
+    /**
+     * @brief Sends an array of data to the ROV.
+     *
+     * If the final block of data is being sent, the checksum is also sent.
+     *
+     * @param data The data to send.
+     * @param length The length of the data to send.
+     */
+    void sendBlocks(const std::uint8_t data[], const std::size_t length);
 
-  inline int getFileDescriptor() { return this->serial_fd; };
-
-  /**
-   * @brief Waits for the handshake with the ROV to complete.
-   *
-   * @details This function blocks until the handshake is complete. It is not
-   * aware of whether the handshake was successful or not according to the ROV.
-   */
-  void awaitHandshake();
-
-  /**
-   * @brief Sends a block of data to the ROV.
-   *
-   * If the final block of data is being sent, the checksum is also sent.
-   *
-   * @param data The data to send.
-   */
-  void sendBlock(uint8_t data);
-
-  /**
-   * @brief Sends an array of data to the ROV.
-   *
-   * If the final block of data is being sent, the checksum is also sent.
-   *
-   * @param data The data to send.
-   * @param length The length of the data to send.
-   */
-  void sendBlocks(const uint8_t data[], size_t length);
-
-  /**
-   * @brief Sends the data to the ROV.
-   *
-   * If the final block of data is being sent, the checksum is also sent.
-   *
-   * @tparam T The type of data to send.
-   * @param data The data to send.
-   */
-  template <typename T>
-  void send(const T &data)
-  {
-    this->sendBlocks((uint8_t *)&data, sizeof(T));
-  }
-
-  /**
-   * @brief Reads data from the ROV without blocking.
-   *
-   * @return The number of bytes in the read buffer so far, or -1 if completed.
-   */
-  int tryReadingData();
-
-  /**
-   * @return True if the last CIPO checksum was good, false otherwise.
-   */
-  inline bool checksumGood() const { return cipo_checksum_status; }
-  /**
-   * @brief Resets the read buffer index to 0.
-   *
-   * @details This should be called after the read buffer is processed.
-   */
-  inline void resetReadBuffer() { read_buffer_index = 0; }
-
-  /**
-   * @brief Resets all buffer indexes to 0.
-   */
-  inline void reset()
-  {
-    read_buffer_index = 0;
-    copi_index = 0;
-    cipo_index = 0;
-    cipo_checksum = 0;
-    copi_checksum = 0;
-
-    serial::serialEmpty(serial_fd, TCIOFLUSH);
-  }
-
-  /**
-   * @brief Pops a byte from the read buffer.
-   *
-   * Do not call this function while the read buffer is being written to.
-   *
-   * @return The byte at the read buffer index.
-   */
-  uint8_t popReadBuffer();
-
-  /**
-   * @brief Pops a block of data from the read buffer.
-   *
-   * Do not call this function while the read buffer is being written to.
-   *
-   * @param length The length of the data to pop.
-   * @return A pointer to the data at the read buffer index.
-   */
-  uint8_t *popReadBuffer(size_t length);
-
-  /**
-   * @brief Pops a block of data from the read buffer.
-   *
-   * Do not call this function while the read buffer is being written to.
-   *
-   * @tparam T The type of data to pop.
-   * @return The data at the read buffer index.
-   */
-  template <typename T>
-  T popReadBuffer()
-  {
-    T data = *(T *)&read_buffer[read_buffer_index];
-    read_buffer_index += sizeof(T);
-    if (read_buffer_index > CIPO_BUFFER_LENGTH)
+    /**
+     * @brief Sends the data to the ROV.
+     *
+     * If the final block of data is being sent, the checksum is also sent.
+     *
+     * @tparam T The type of data to send.
+     * @param data The data to send.
+     */
+    template<typename T> void send(const T& data)
     {
-      ROS_ERROR("Read buffer overflow in RovCommsController::popReadBuffer()");
-      read_buffer_index = 0;
-      exit(EXIT_FAILURE);
+        this->sendBlocks((std::uint8_t*)&data, sizeof(T));
     }
-    return data;
-  }
+
+    /**
+     * @brief Reads data from the ROV without blocking.
+     *
+     * @return The number of bytes in the read buffer so far, or -1 if
+     * completed.
+     */
+    int tryReadingData();
+
+    /**
+     * @return True if the last CIPO checksum was good, false otherwise.
+     */
+    inline bool checksumGood() const { return m_CipoChecksumStatus; }
+
+    /**
+     * @brief Resets the read buffer index to 0.
+     *
+     * @details This should be called after the read buffer is processed.
+     */
+    inline void resetReadBuffer() { m_ReadBufferIndex = 0; }
+
+    /**
+     * @brief Resets all buffer indexes to 0.
+     */
+    inline void reset()
+    {
+        m_ReadBufferIndex = 0;
+        m_CopiIndex       = 0;
+        m_CipoIndex       = 0;
+        m_CipoChecksum    = 0;
+        m_CopiChecksum    = 0;
+
+        serial::serialEmpty(m_SerialFileDescriptor, TCIOFLUSH);
+    }
+
+    /**
+     * @brief Pops a byte from the read buffer.
+     *
+     * Do not call this function while the read buffer is being written to.
+     *
+     * @return The byte at the read buffer index.
+     */
+    std::uint8_t popReadBuffer();
+
+    /**
+     * @brief Pops a block of data from the read buffer.
+     *
+     * Do not call this function while the read buffer is being written to.
+     *
+     * @param length The length of the data to pop.
+     * @return A pointer to the data at the read buffer index.
+     */
+    std::uint8_t* popReadBuffer(const std::size_t length);
+
+    /**
+     * @brief Pops a block of data from the read buffer.
+     *
+     * Do not call this function while the read buffer is being written to.
+     *
+     * @tparam T The type of data to pop.
+     * @return The data at the read buffer index.
+     */
+    template<typename T> T popReadBuffer()
+    {
+        T data             = *(T*)&read_buffer[m_ReadBufferIndex];
+        m_ReadBufferIndex += sizeof(T);
+        if (m_ReadBufferIndex > CIPO_BUFFER_LENGTH)
+        {
+            ROS_ERROR(
+                "Read buffer overflow in RovCommsController::popReadBuffer()");
+            m_ReadBufferIndex = 0;
+            exit(EXIT_FAILURE);
+        }
+        return data;
+    }
 
 }; // class RovCommsController
 

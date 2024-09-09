@@ -8,9 +8,10 @@
 //   MS_CAMERA_MOTION = 3
 // } MapperState_t;
 
-typedef struct {
-  float updown;
-  float leftright; 
+typedef struct
+{
+    float updown;
+    float leftright;
 } Joystick_t;
 
 typedef bool JoyButton_t;
