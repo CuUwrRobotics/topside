@@ -36,16 +36,16 @@ constexpr static float MAX_DELAY_SEC = 0.2;
 // custom_msgs::MotorControls ros_data::motor_controls_msg;
 namespace ros_data
 {
-std::uint8_t                 switch_control;
-std::array<std::uint16_t, 6> motor_throttles;
-std::array<std::uint8_t, 6>  servo_angles;
+std::uint8_t                           g_SwitchControl;
+std::array<std::uint16_t, MOTOR_COUNT> g_MotorThrottles;
+std::array<std::uint8_t, MOTOR_COUNT>  g_ServoAngles;
 } // namespace ros_data
 
 constexpr std::uint8_t MPU_DATA_BYTES = 14;
 
 constexpr std::uint8_t COPI_BUFFER_LENGTH
-    = ((2 * ros_data::motor_throttles.size()) + 1
-       + ros_data::servo_angles.size());
+    = ((2 * ros_data::g_MotorThrottles.size()) + 1
+       + ros_data::g_ServoAngles.size());
 constexpr std::uint8_t CIPO_BUFFER_LENGTH
     = (1 + MPU_DATA_BYTES + sizeof(float));
 
@@ -56,12 +56,16 @@ ros::Time next_ping_time;
 
 std::uint32_t prev_copi_millis = 0;
 
-// #define MODE_HANDSHAKE 0
-#define MODE_COPI            1
-#define MODE_CIPO_SUCCESSFUL 2
-#define MODE_CIPO            3
+enum class Modes : std::uint8_t
+{
+    HANDSHAKE,
+    COPI,
+    CIPO_SUCCESSFUL,
+    CIPO,
+}
 
-int mode = MODE_CIPO;
+Modes mode
+    = Modes::CIPO;
 
 int main(int argc, char* argv[])
 {
@@ -145,14 +149,14 @@ int main(int argc, char* argv[])
     ROS_INFO("Attempting to open Arduino using port '%s' with %d baud\n",
              port.c_str(),
              baud);
-    int serial_fd = serial::openSerialPort(port.c_str(), baud);
-    if (serial_fd < 0)
+    int serialFileDescriptor = serial::openSerialPort(port.c_str(), baud);
+    if (serialFileDescriptor < 0)
     {
         ROS_ERROR("Initializing Arduino serial port failed. Exiting.\n");
         std::exit(EXIT_FAILURE);
     }
 
-    RovCommsController rov_comms_controller(serial_fd,
+    RovCommsController rov_comms_controller(serialFileDescriptor,
                                             CIPO_BUFFER_LENGTH,
                                             COPI_BUFFER_LENGTH);
 
@@ -160,7 +164,7 @@ int main(int argc, char* argv[])
 
     rov_comms_controller.awaitHandshake();
 
-    serial::serialEmpty(serial_fd);
+    serial::serialEmpty(serialFileDescriptor);
 
     next_ping_time = CREATE_DELAY(MAX_DELAY_SEC);
 
@@ -178,7 +182,7 @@ void softReset(RovCommsController& rov_comms_controller)
 {
     rov_comms_controller.reset();
     rov_comms_controller.awaitHandshake();
-    mode           = MODE_COPI;
+    mode           = Modes::COPI;
     next_ping_time = CREATE_DELAY(MAX_DELAY_SEC);
     last_read_len  = 0;
 }
@@ -188,28 +192,28 @@ void controlLoop(RovCommsController& rov_comms_controller,
                  ros::Publisher&     motion_pub,
                  ros::Publisher&     depth_pub)
 {
-    if (mode == MODE_COPI)
+    if (mode == Modes::COPI)
     {
         ROS_DEBUG("Mode: COPI");
 
-        for (std::ptrdiff_t iter = 0; iter < ros_data::motor_throttles.size();
+        for (std::ptrdiff_t iter = 0; iter < ros_data::g_MotorThrottles.size();
              iter++)
         {
-            rov_comms_controller.send(ros_data::motor_throttles[iter]);
+            rov_comms_controller.send(ros_data::g_MotorThrottles[iter]);
         }
-        rov_comms_controller.send(ros_data::switch_control);
-        for (std::ptrdiff_t iter = 0; iter < ros_data::motor_throttles.size();
+        rov_comms_controller.send(ros_data::g_SwitchControl);
+        for (std::ptrdiff_t iter = 0; iter < ros_data::g_MotorThrottles.size();
              iter++)
         {
-            rov_comms_controller.send(ros_data::servo_angles[iter]);
+            rov_comms_controller.send(ros_data::g_ServoAngles[iter]);
         }
 
         ROS_DEBUG("Entering mode: CIPO");
-        mode           = MODE_CIPO;
+        mode           = Modes::CIPO;
         next_ping_time = CREATE_DELAY(MAX_DELAY_SEC);
     } // if MODE_COPI
 
-    else if (mode == MODE_CIPO)
+    else if (mode == Modes::CIPO)
     {
         if (NOW() >= next_ping_time)
         {
@@ -233,7 +237,7 @@ void controlLoop(RovCommsController& rov_comms_controller,
             // Reached the end of the read buffer
             if (rov_comms_controller.checksumGood())
             {
-                mode = MODE_CIPO_SUCCESSFUL;
+                mode = Modes::CIPO_SUCCESSFUL;
             }
             else
             {
@@ -248,9 +252,9 @@ void controlLoop(RovCommsController& rov_comms_controller,
             next_ping_time = CREATE_DELAY(MAX_DELAY_SEC);
         }
 
-    } // if MODE_CIPO
+    } // if Modes::CIPO
 
-    else if (mode == MODE_CIPO_SUCCESSFUL)
+    else if (mode == Modes::CIPO_SUCCESSFUL)
     {
         ROS_DEBUG("MODE: CIPO_SUCCESSFUL");
 
@@ -266,8 +270,8 @@ void controlLoop(RovCommsController& rov_comms_controller,
         depth_msg.data = depth;
         depth_pub.publish(depth_msg);
 
-        mode = MODE_COPI;
-    } // if MODE_CIPO_SUCCESSFUL
+        mode = Modes::COPI;
+    } // if Modes::CIPO_SUCCESSFUL
 
     else
     {
