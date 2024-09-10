@@ -99,8 +99,8 @@ int main(int argc, char* argv[])
     ros::Publisher depth_pub
         = node.advertise<std_msgs::Float32>("hardware/depth", 1);
 
-    std::string port = "/dev/ttyUSB0";
-    int         baud = 2'000'000;
+    std::string deviceName = "/dev/ttyUSB0";
+    int         baudRate   = 2'000'000;
 
     if (argc > 1)
     {
@@ -121,12 +121,12 @@ int main(int argc, char* argv[])
             {
                 if (argc < arg + 2)
                 {
-                    ROS_WARN("-p specified, but no port was given. Continuing "
-                             "with default port.");
+                    ROS_WARN("-p specified, but no device name was given. "
+                             "Continuing with default device name.");
                 }
                 else
                 {
-                    port = argv[arg + 1];
+                    deviceName = argv[arg + 1];
                 }
             }
             else if (std::strcmp(argv[arg], "-b") == 0)
@@ -135,24 +135,26 @@ int main(int argc, char* argv[])
                 {
                     ROS_WARN("-b specified, but no baud rate was given. "
                              "Continuing with default rate %d.",
-                             baud);
+                             baudRate);
                 }
                 else
                 {
-                    baud = atoi(argv[arg + 1]);
+                    baudRate = atoi(argv[arg + 1]);
                 }
             }
         }
     }
 
     // Arduino Connection
-    ROS_INFO("Attempting to open Arduino using port '%s' with %d baud\n",
-             port.c_str(),
-             baud);
-    int serialFileDescriptor = serial::openSerialPort(port.c_str(), baud);
+    ROS_INFO("Attempting to open Arduino using device '%s' with baud rate %d\n",
+             deviceName.c_str(),
+             baudRate);
+    int serialFileDescriptor
+        = serial::openSerialPort(deviceName.c_str(), baudRate);
     if (serialFileDescriptor < 0)
     {
-        ROS_ERROR("Initializing Arduino serial port failed. Exiting.\n");
+        ROS_ERROR(
+            "Failed to initialize Arduino serial communication. Exiting.\n");
         std::exit(EXIT_FAILURE);
     }
 
@@ -192,90 +194,102 @@ void controlLoop(RovCommsController& rov_comms_controller,
                  ros::Publisher&     motion_pub,
                  ros::Publisher&     depth_pub)
 {
-    if (mode == Modes::COPI)
+    switch (mode)
     {
-        ROS_DEBUG("Mode: COPI");
+    case Modes::HANDSHAKE:
+        break;
 
-        for (std::ptrdiff_t iter = 0; iter < ros_data::g_MotorThrottles.size();
-             iter++)
+    case Modes::COPI:
         {
-            rov_comms_controller.send(ros_data::g_MotorThrottles[iter]);
-        }
-        rov_comms_controller.send(ros_data::g_SwitchControl);
-        for (std::ptrdiff_t iter = 0; iter < ros_data::g_MotorThrottles.size();
-             iter++)
-        {
-            rov_comms_controller.send(ros_data::g_ServoAngles[iter]);
-        }
+            ROS_DEBUG("Mode: COPI");
 
-        ROS_DEBUG("Entering mode: CIPO");
-        mode           = Modes::CIPO;
-        next_ping_time = CREATE_DELAY(MAX_DELAY_SEC);
-    } // if MODE_COPI
-
-    else if (mode == Modes::CIPO)
-    {
-        if (NOW() >= next_ping_time)
-        {
-            ROS_DEBUG("Timeout: %f", (NOW() - next_ping_time).toSec());
-            ROS_WARN("Timeout when communicating with arduino (in CIPO), "
-                     "resetting.");
-            softReset(rov_comms_controller);
-        }
-
-        int read_len = rov_comms_controller.tryReadingData();
-        if (read_len == -1)
-        {
-            ROS_DEBUG("CIPO buffer ready");
-
-            // Make sure there isn't any data remaining in the serial's hardware
-            // RX buffer Needed because the arduino will sometimes
-            // double-transmit, messing up the synchronization
-            serial::serialEmpty(rov_comms_controller.getFileDescriptor(),
-                                TCIFLUSH);
-
-            // Reached the end of the read buffer
-            if (rov_comms_controller.checksumGood())
+            // Send Throttle Information
+            for (const auto throttle : ros_data::g_MotorThrottles)
             {
-                mode = Modes::CIPO_SUCCESSFUL;
+                rov_comms_controller.send(throttle);
             }
-            else
+
+            rov_comms_controller.send(ros_data::g_SwitchControl);
+
+            // Send Servo Angles
+            for (const auto angle : ros_data::g_ServoAngles)
             {
-                ROS_WARN("Checksum failed when communicating with arduino (in "
-                         "CIPO), resetting.");
+                rov_comms_controller.send(angle);
+            }
+
+            ROS_DEBUG("Entering mode: CIPO");
+            mode           = Modes::CIPO;
+            next_ping_time = CREATE_DELAY(MAX_DELAY_SEC);
+
+            break;
+        }
+
+    case Modes::CIPO:
+        {
+            if (NOW() >= next_ping_time)
+            {
+                ROS_DEBUG("Timeout: %f", (NOW() - next_ping_time).toSec());
+                ROS_WARN("Timeout when communicating with arduino (in CIPO), "
+                         "resetting.");
                 softReset(rov_comms_controller);
             }
+
+            int read_len = rov_comms_controller.tryReadingData();
+            if (read_len == -1)
+            {
+                ROS_DEBUG("CIPO buffer ready");
+
+                // Make sure there isn't any data remaining in the serial's
+                // hardware RX buffer Needed because the arduino will sometimes
+                // double-transmit, messing up the synchronization
+                serial::serialEmpty(rov_comms_controller.getFileDescriptor(),
+                                    TCIFLUSH);
+
+                // Reached the end of the read buffer
+                if (rov_comms_controller.checksumGood())
+                {
+                    mode = Modes::CIPO_SUCCESSFUL;
+                }
+                else
+                {
+                    ROS_WARN(
+                        "Checksum failed when communicating with arduino (in "
+                        "CIPO), resetting.");
+                    softReset(rov_comms_controller);
+                }
+            }
+            else if (read_len != last_read_len)
+            {
+                last_read_len  = read_len;
+                next_ping_time = CREATE_DELAY(MAX_DELAY_SEC);
+            }
+            break;
         }
-        else if (read_len != last_read_len)
+
+    case Modes::CIPO_SUCCESSFUL:
         {
-            last_read_len  = read_len;
-            next_ping_time = CREATE_DELAY(MAX_DELAY_SEC);
+            ROS_DEBUG("MODE: CIPO_SUCCESSFUL");
+
+            rov_comms_controller.resetReadBuffer();
+            leak_msg.leaks = rov_comms_controller.popReadBuffer();
+            leak_pub.publish(leak_msg);
+
+            std::uint8_t* data = rov_comms_controller.popReadBuffer(14);
+            motion_pub.publish(processMpu6050Data(data));
+
+            float depth = rov_comms_controller.popReadBuffer<float>();
+            std_msgs::Float32 depth_msg;
+            depth_msg.data = depth;
+            depth_pub.publish(depth_msg);
+
+            mode = Modes::COPI;
+            break;
         }
 
-    } // if Modes::CIPO
-
-    else if (mode == Modes::CIPO_SUCCESSFUL)
-    {
-        ROS_DEBUG("MODE: CIPO_SUCCESSFUL");
-
-        rov_comms_controller.resetReadBuffer();
-        leak_msg.leaks = rov_comms_controller.popReadBuffer();
-        leak_pub.publish(leak_msg);
-
-        std::uint8_t* data = rov_comms_controller.popReadBuffer(14);
-        motion_pub.publish(processMpu6050Data(data));
-
-        float             depth = rov_comms_controller.popReadBuffer<float>();
-        std_msgs::Float32 depth_msg;
-        depth_msg.data = depth;
-        depth_pub.publish(depth_msg);
-
-        mode = Modes::COPI;
-    } // if Modes::CIPO_SUCCESSFUL
-
-    else
-    {
-        ROS_ERROR("Invalid state reached.");
-        std::exit(EXIT_FAILURE);
+    default:
+        {
+            ROS_ERROR("Invalid state reached.");
+            std::exit(EXIT_FAILURE);
+        }
     }
 }; // controlLoop
