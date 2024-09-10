@@ -20,7 +20,11 @@ class pid
     double       _integral;
 
   public:
-    pid(double Kp, double Ki, double Kd, double max = 1, double min = -1)
+    pid(const double Kp,
+        const double Ki,
+        const double Kd,
+        const double max = 1,
+        const double min = -1)
         : _max(max),
           _min(min),
           _Kp(Kp),
@@ -36,7 +40,10 @@ class pid
      *
      * @param
      */
-    double tick(double current, double desired, double dt, bool print = false)
+    double tick(const double current,
+                const double desired,
+                const double dt,
+                const bool   print = false)
     {
         // Calculate error
         const double error = desired - current;

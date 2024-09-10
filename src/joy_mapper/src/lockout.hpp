@@ -2,101 +2,106 @@
 #define LOCKOUT_HPP
 
 #include <ros/ros.h>
-#include <stdint.h>
 
 #include <chrono>
+#include <cstdint>
 
-#define schr std::chrono
-
-typedef enum
+enum class LockoutState : std::int8_t
 {
-    LOC_FREE = 1,
-    LOC_ENTER_LOCKED__HOLD = 2,
-    LOC_ENTER_LOCKED__RELEASE = -2,
-    LOC_LOCKED = -1,
-    LOC_EXIT_LOCKED__HOLD = -3,
-    LOC_EXIT_LOCKED__RELEASE = 3,
-} LockoutState_t;
+    FREE                  = 1,
+    ENTER_LOCKED__HOLD    = 2,
+    ENTER_LOCKED__RELEASE = -2,
+    LOCKED                = -1,
+    EXIT_LOCKED__HOLD     = -3,
+    EXIT_LOCKED__RELEASE  = 3,
+};
 
 class LockoutStateMachine
 {
-private:
-    bool *btn1, *btn2;
-    LockoutState_t state;
-    struct timespec time;
-    double stoptime, hold_time;
+  private:
+    bool*           m_Button1;
+    bool*           m_Button2;
+    LockoutState    m_State;
+    struct timespec m_Time;
+    double          m_StopTime;
+    double          m_HoldTime;
 
-public:
-    LockoutStateMachine(bool *btn1, bool *btn2, float hold_time_s = 3)
+  public:
+    LockoutStateMachine(const bool* button1,
+                        const bool* button2,
+                        const float holdTime = 3)
     {
-        this->btn1 = btn1;
-        this->btn2 = btn2;
-        this->state = LOC_LOCKED;
-        this->hold_time = hold_time_s;
+        this->m_Button1  = button1;
+        this->m_Button2  = button2;
+        this->m_State    = LockoutState::LOCKED;
+        this->m_HoldTime = holdTime;
     }
+
     bool isLocked()
     {
-        static double now;
-        schr::milliseconds ms = schr::duration_cast<schr::milliseconds>(
-            schr::system_clock::now().time_since_epoch());
-        now = double(ms.count()) / 1000.0;
+        static double             now;
+        std::chrono::milliseconds ms
+            = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch());
+        now = static_cast<double>(ms.count()) / 1000.0;
 
-        switch (state)
+        switch (m_State)
         {
-        case LOC_FREE:
-            if (*btn1 || *btn2)
+        case LockoutState::FREE:
+            if (*m_Button1 || *m_Button2)
             {
-                state = LOC_ENTER_LOCKED__HOLD;
-                stoptime = now + 0.05; // Give a little time for debounce
+                m_State    = LockoutState::ENTER_LOCKED__HOLD;
+                m_StopTime = now + 0.05; // Give a little m_Time for debounce
             }
             break;
-        case LOC_ENTER_LOCKED__HOLD:
-            if (!(*btn1 || *btn2))
+        case LockoutState::ENTER_LOCKED__HOLD:
+            if (!(*m_Button1 || *m_Button2))
             {
                 // Buttons were released early
-                state = LOC_FREE;
+                m_State = LockoutState::FREE;
             }
-            if (now >= stoptime)
+            if (now >= m_StopTime)
             {
-                state = LOC_ENTER_LOCKED__RELEASE;
-            }
-            break;
-        case LOC_ENTER_LOCKED__RELEASE:
-            if (!(*btn1 || *btn2))
-            {
-                state = LOC_LOCKED;
+                m_State = LockoutState::ENTER_LOCKED__RELEASE;
             }
             break;
-        case LOC_LOCKED:
-            if (*btn1 && *btn2)
+        case LockoutState::ENTER_LOCKED__RELEASE:
+            if (!(*m_Button1 || *m_Button2))
             {
-                state = LOC_EXIT_LOCKED__HOLD;
-                stoptime = now + hold_time;
+                m_State = LockoutState::LOCKED;
             }
             break;
-        case LOC_EXIT_LOCKED__HOLD:
-            if (!(*btn1 && *btn2))
+        case LockoutState::LOCKED:
+            if (*m_Button1 && *m_Button2)
             {
-                state = LOC_LOCKED;
+                m_State    = LockoutState::EXIT_LOCKED__HOLD;
+                m_StopTime = now + m_HoldTime;
+            }
+            break;
+        case LockoutState::EXIT_LOCKED__HOLD:
+            if (!(*m_Button1 && *m_Button2))
+            {
+                m_State = LockoutState::LOCKED;
                 break;
             }
-            if (now >= stoptime)
+            if (now >= m_StopTime)
             {
-                state = LOC_EXIT_LOCKED__RELEASE;
+                m_State = LockoutState::EXIT_LOCKED__RELEASE;
             }
             break;
 
-        case LOC_EXIT_LOCKED__RELEASE:
-            if (!(*btn1 && *btn2))
+        case LockoutState::EXIT_LOCKED__RELEASE:
+            if (!(*m_Button1 && *m_Button2))
             {
-                state = LOC_FREE;
+                m_State = LockoutState::FREE;
             }
             break;
         default:
             assert(false);
             break;
         }
-        return state < 0;
+
+        return m_State < 0;
     }
 };
 

@@ -8,13 +8,13 @@
 //   MS_CAMERA_MOTION = 3
 // } MapperState_t;
 
-typedef struct
+struct Joystick_t
 {
     float updown;
     float leftright;
-} Joystick_t;
+};
 
-typedef bool JoyButton_t;
-typedef float JoyTrigger_t;
+using JoyButton_t  = bool;
+using JoyTrigger_t = float;
 
 #endif /* end of include guard: JOY_MAPPER_MAIN */

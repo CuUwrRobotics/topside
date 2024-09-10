@@ -19,57 +19,68 @@ using custom_msgs::EulerMotion = VecWithCurl;
 
 ros::Publisher output_vec_pub;
 
-VecWithCurl latest_controller, latest_position;
-float       latest_depth;
+VecWithCurl latest_controller;
+VecWithCurl latest_position;
+float       latestDepth;
 VecWithCurl plant_output;
-bool        lockout_flag;
+bool        lockedout;
 
 // Flag raised when input data is ready
-bool data_ready_flag            = false;
-bool controller_data_ready_flag = false;
-bool accel_data_ready_flag      = false;
-bool depth_data_ready_flag      = false;
+bool dataReady             = false;
+bool controllerReady       = false;
+bool accelerationDataReady = false;
+bool depthDataReady        = false;
 
 void controllerRosCallback(
-    const custom_msgs::EulerMotion::ConstPtr& controller_request)
+    const custom_msgs::EulerMotion::ConstPtr& controllerRequest)
 {
     // Store data locally and raise the flag
-    latest_controller          = *controller_request;
-    controller_data_ready_flag = true;
+    latest_controller = *controllerRequest;
+    controllerReady   = true;
 }
 
 void accelGyroRosCallback(const custom_msgs::EulerMotion::ConstPtr& position)
 {
     // Store data locally and raise the flag
     latest_position       = *position;
-    accel_data_ready_flag = true;
+    accelerationDataReady = true;
 }
 
 void depthRosCallback(const std_msgs::Float32::ConstPtr& depth)
 {
-    latest_depth          = depth->data;
-    depth_data_ready_flag = true;
+    latestDepth    = depth->data;
+    depthDataReady = true;
 }
 
-bool lockoutCallback(custom_msgs::Lockout::Request&  req,
-                     custom_msgs::Lockout::Response& res)
+bool lockoutCallback(const custom_msgs::Lockout::Request&  req,
+                     const custom_msgs::Lockout::Response& res)
 {
-    lockout_flag = req.lockout;
-    ROS_INFO("Lockout updated: %s\n", lockout_flag ? "locked" : "unlocked");
-    data_ready_flag = true;
+    lockedout = req.lockout;
+    ROS_INFO("Lockout updated: %s\n", lockedout ? "locked" : "unlocked");
+    dataReady = true;
     return true;
 }
 
-double    desired_z, desired_r, desired_p, desired_w;
-double    prev_w, current_w;
-ros::Time prev_time;
+double    desired_z;
+double    desired_r;
+double    desired_p;
+double    desired_w;
+double    prev_w;
+double    current_w;
+ros::Time previousTime;
 
-pid pid_z = pid(8, 1, 2), pid_pitch(6, 1, 1), pid_roll(-1, -0.1, 0.1),
-    pid_yaw(2, 0, 2);
-// pid pid_z = pid(1, -0.1, 0.1), pid_pitch(1, 0.1, 0.1), pid_roll(GG, 0, 0),
-// pid_yaw(1, 0.1, 0.1);
+pid pid_z = pid(8, 1, 2);
+pid pid_pitch(6, 1, 1);
+pid pid_roll(-1, -0.1, 0.1);
+pid pid_yaw(2, 0, 2);
 
-bool first_run = true;
+/*
+pid pid_z = pid(1, -0.1, 0.1);
+pid pid_pitch(1, 0.1, 0.1);
+pid pid_roll(GG, 0, 0);
+pid pid_yaw(1, 0.1, 0.1);
+ */
+bool firstRun = true;
 
 // DC blocking filter coefficient of 0.9 was chosen by trial and error
 // DcBlockingFilter accel_z_filter = DcBlockingFilter(0.9);
@@ -78,7 +89,7 @@ void loop()
 {
     // When any new data is ready, this will be called
 
-    if (lockout_flag)
+    if (lockedout)
     {
         // Handle lockout if needed
     }
@@ -94,21 +105,21 @@ void loop()
         else
         {
             // Do nothing unless yaw data is ready
-            ROS_INFO("Wating for init data from accelerometer");
+            ROS_INFO("Waiting for init data from accelerometer");
             return;
         }
     }
 
     // Determine the time since last run
-    ros::Time time = ros::Time::now();
-    double    dt_s = (time - prev_time).toSec();
-    prev_time      = time;
+    ros::Time time      = ros::Time::now();
+    double    timeDelta = (time - previousTime).toSec();
+    previousTime        = time;
 
     // This performs an integral
-    desired_z += latest_controller.z * dt_s;
+    desired_z += latest_controller.z * timeDelta;
     desired_r  = latest_controller.roll;
     desired_p  = latest_controller.pitch;
-    desired_w += latest_controller.yaw * dt_s;
+    desired_w += latest_controller.yaw * timeDelta;
 
     double w_diff = latest_position.yaw - prev_w;
     // Change in yaw was greater than pi, so we must have overflowed and jumped
@@ -122,8 +133,14 @@ void loop()
 
         // Correct by removing the overflow component
         // This pi does matter since it's the actual overflow amount
-        if (w_diff > 0) { w_diff -= 2 * M_PI; }
-        else { w_diff += 2 * M_PI; }
+        if (w_diff > 0)
+        {
+            w_diff -= 2 * M_PI;
+        }
+        else
+        {
+            w_diff += 2 * M_PI;
+        }
     }
 
     current_w += w_diff;
@@ -132,16 +149,17 @@ void loop()
     double z_cmd = 0, pitch_cmd = 0, roll_cmd = 0,
            yaw_cmd = latest_controller.yaw;
 
-    z_cmd = pid_z.tick(latest_depth, desired_z, dt_s, false);
+    z_cmd = pid_z.tick(latestDepth, desired_z, timeDelta, false);
     // z_cmd = desired_z;
 
-    pitch_cmd = pid_pitch.tick(latest_position.pitch, desired_p, dt_s, false);
-    roll_cmd  = pid_roll.tick(latest_position.roll, desired_r, dt_s, false);
+    pitch_cmd
+        = pid_pitch.tick(latest_position.pitch, desired_p, timeDelta, false);
+    roll_cmd = pid_roll.tick(latest_position.roll, desired_r, timeDelta, false);
 
-    yaw_cmd = pid_yaw.tick(current_w, desired_w, dt_s, false);
+    yaw_cmd = pid_yaw.tick(current_w, desired_w, timeDelta, false);
 
     // ROS_INFO("Current Z: %6.6f desired Z:  %6.6f, Z cmd: %6.6f",
-    // latest_depth, desired_z, z_cmd); ROS_INFO("Current R: %6.6f desired R:
+    // latestDepth, desired_z, z_cmd); ROS_INFO("Current R: %6.6f desired R:
     // %6.6f, R cmd: %6.6f\n", latest_position.pitch, desired_p, pitch_cmd);
 
     plant_output.z     = z_cmd;
@@ -163,7 +181,7 @@ void loop()
     printf("ACTUAL:  X: %6.3f Y: %6.3f Z: %6.3f; R: %6.3f P: %6.3f W: %6.3f\n",
            latest_position.x,
            latest_position.y,
-           latest_depth,
+           latestDepth,
            latest_position.roll,
            latest_position.pitch,
            current_w);
@@ -186,7 +204,7 @@ void init()
 
     prev_w = 0;
 
-    latest_depth = 0;
+    latestDepth = 0;
 
     latest_position.x     = 0;
     latest_position.y     = 0;
@@ -195,7 +213,7 @@ void init()
     latest_position.pitch = 0;
     latest_position.yaw   = 0;
 
-    prev_time = ros::Time::now();
+    previousTime = ros::Time::now();
 
     printf("\n\n\n");
 }
@@ -239,15 +257,15 @@ int main(int argc, char* argv[])
         // Look for new data on the subscribers
         ros::spinOnce();
 
-        if (controller_data_ready_flag && accel_data_ready_flag
-            && depth_data_ready_flag)
+        if (controllerReady && accelerationDataReady && depthDataReady)
         {
             loop();
             output_vector_pub.publish(plant_output);
-            controller_data_ready_flag = 0;
-            accel_data_ready_flag      = 0;
-            depth_data_ready_flag      = 0;
+            controllerReady       = 0;
+            accelerationDataReady = 0;
+            depthDataReady        = 0;
         }
     }
+
     return 0;
 }

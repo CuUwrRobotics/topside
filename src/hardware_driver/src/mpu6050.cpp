@@ -14,21 +14,29 @@ custom_msgs::EulerMotion processMpu6050Data(std::uint8_t raw_buffer[])
 
     // Extract the 16-bit signed integers and divide by 2**14 to get a value on
     // range [-1, 1]
-    Vector3D accel(float(std::int16_t((raw_buffer[8] << 8) | (raw_buffer[9])))
-                       / float(0x1 << 14),
-                   float(std::int16_t((raw_buffer[10] << 8) | (raw_buffer[11])))
-                       / float(0x1 << 14),
-                   float(std::int16_t((raw_buffer[12] << 8) | (raw_buffer[13])))
-                       / float(0x1 << 14));
+    Vector3D accel(static_cast<float>(static_cast<std::int16_t>(
+                       (raw_buffer[8] << 8) | (raw_buffer[9])))
+                       / static_cast<float>(0x1 << 14),
+                   static_cast<float>(static_cast<std::int16_t>(
+                       (raw_buffer[10] << 8) | (raw_buffer[11])))
+                       / static_cast<float>(0x1 << 14),
+                   static_cast<float>(static_cast<std::int16_t>(
+                       (raw_buffer[12] << 8) | (raw_buffer[13])))
+                       / static_cast<float>(0x1 << 14));
+
     Quaternion3D gyro(
-        float(std::int16_t((raw_buffer[0] << 8) | (raw_buffer[1])))
-            / float(0x1 << 14),
-        float(std::int16_t((raw_buffer[2] << 8) | (raw_buffer[3])))
-            / float(0x1 << 14),
-        float(std::int16_t((raw_buffer[4] << 8) | (raw_buffer[5])))
-            / float(0x1 << 14),
-        float(std::int16_t((raw_buffer[6] << 8) | (raw_buffer[7])))
-            / float(0x1 << 14));
+        static_cast<float>(
+            static_cast<std::int16_t>((raw_buffer[0] << 8) | (raw_buffer[1])))
+            / static_cast<float>(0x1 << 14),
+        static_cast<float>(
+            static_cast<std::int16_t>((raw_buffer[2] << 8) | (raw_buffer[3])))
+            / static_cast<float>(0x1 << 14),
+        static_cast<float>(
+            static_cast<std::int16_t>((raw_buffer[4] << 8) | (raw_buffer[5])))
+            / static_cast<float>(0x1 << 14),
+        static_cast<float>(
+            static_cast<std::int16_t>((raw_buffer[6] << 8) | (raw_buffer[7])))
+            / static_cast<float>(0x1 << 14));
 
     // Units are 2g per-one; this converts to 1g per one
     accel.x *= 2;
@@ -42,13 +50,14 @@ custom_msgs::EulerMotion processMpu6050Data(std::uint8_t raw_buffer[])
         (2 * (gyro.a * gyro.b + gyro.c * gyro.d)),
         ((gyro.a * gyro.a) - (gyro.b * gyro.b) - (gyro.c * gyro.c)
          + (gyro.d * gyro.d)));
-    constexpr double LOCAL_GRAV
-        = 9.81818;                     /* Set the local gravity before use
-                                          https://www.sensorsone.com/local-gravity-calculator/#height*/
-    constexpr double LIL_G  = 9.80665; /* Gravity For 1g*/
-    gravity.x              *= LOCAL_GRAV / LIL_G;
-    gravity.y              *= LOCAL_GRAV / LIL_G;
-    gravity.z              *= LOCAL_GRAV / LIL_G;
+    constexpr double LOCAL_GRAV  = 9.81818;
+    /* Set the local gravity before using
+     * https://www.sensorsone.com/local-gravity-calculator/#height
+     */
+    constexpr double LIL_G       = 9.80665; /* Gravity For 1g*/
+    gravity.x                   *= LOCAL_GRAV / LIL_G;
+    gravity.y                   *= LOCAL_GRAV / LIL_G;
+    gravity.z                   *= LOCAL_GRAV / LIL_G;
 
     Vector3D acceleration_without_gravity(accel.x - gravity.x,
                                           accel.y - gravity.y,
@@ -69,9 +78,7 @@ custom_msgs::EulerMotion processMpu6050Data(std::uint8_t raw_buffer[])
 
     // Fix the physical mapping of the ROV
     // TODO: This should be configurable and not hidden away in this function
-    float temp   = result.roll;
-    result.roll  = result.pitch;
-    result.pitch = temp;
+    std::swap(result.roll, result.pitch);
 
     result.x *= LOCAL_GRAV;
     result.y *= LOCAL_GRAV;

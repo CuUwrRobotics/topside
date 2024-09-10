@@ -65,8 +65,9 @@
 class DcBlockingFilter
 {
   private:
-    double r;
-    double prev_x, prev_y;
+    const double r;
+    double       prev_x;
+    double       prev_y;
 
   public:
     /**
@@ -75,7 +76,7 @@ class DcBlockingFilter
      * @param r_val The Coefficient of the filter. See class description for
      * more info.
      */
-    DcBlockingFilter(double r_val)
+    DcBlockingFilter(const double r_val)
     {
         this->r = r_val;
         prev_x  = 0;
@@ -88,7 +89,7 @@ class DcBlockingFilter
      * @param x The input sample.
      * @return double The filtered sample.
      */
-    double filter(double x)
+    double filter(const double x)
     {
         double y = x - prev_x + r * prev_y;
         prev_x   = x;

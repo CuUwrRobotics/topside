@@ -3,180 +3,204 @@
 #define ACCELERATION_HPP
 
 #include <ros/ros.h>
-#include <stdint.h>
-#include <math.h>
 
 #include <chrono>
+#include <cmath>
+#include <cstdint>
 
 namespace acceleration
 {
 
-    inline long long millis()
+inline std::int64_t millis()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
+
+class Accelerator
+{
+  public:
+    Accelerator() {};
+    virtual ~Accelerator() {};
+
+    virtual float getNextValue(const float forcing)
     {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        throw std::runtime_error(
+            "Accelerator base class cannot be directly used.");
+    };
+
+    virtual void fillMemory(const float lastValue)
+    {
+        throw std::runtime_error(
+            "Accelerator base class cannot be directly used.");
+    };
+};
+
+template<std::size_t MEMORY_LENGTH>
+class SCurve : public Accelerator
+{
+  protected:
+    std::array<float, MEMORY_LENGTH> filter;
+    std::array<float, MEMORY_LENGTH> memory;
+    std::size_t                      lastMemoryIndex;
+
+  public:
+    SCurve()
+    {
+        memory.fill(0);
+        lastMemoryIndex = 0;
+
+        // Build a filter to convolve with the input
+        float stepSize  = 1.0f / MEMORY_LENGTH;
+        float filterSum = 0;
+
+        for (std::size_t idx = 0; idx < MEMORY_LENGTH; idx++)
+        {
+            if (idx < MEMORY_LENGTH / 2)
+            {
+                filter[idx] = idx * stepSize;
+            }
+            else
+            {
+                filter[idx] = 1 - (idx * stepSize);
+            }
+            filterSum += filter[idx];
+        }
+        for (std::size_t idx = 0; idx < MEMORY_LENGTH; idx++)
+        {
+            filter[idx] /= filterSum;
+        }
     }
 
-    class Accelerator
+    float getNextValue(const float forcing)
     {
-    public:
-        Accelerator() {};
-        virtual ~Accelerator() {};
-        virtual float getNextValue(float forcing)
+        static float       sum;
+        static std::size_t idx;
+        static std::size_t mem_idx;
+
+        // Append the memory with the new value
+        memory[lastMemoryIndex++] = forcing;
+        lastMemoryIndex
+            %= MEMORY_LENGTH; // If we overflow, rotate back to the beginning
+
+        sum = 0;
+        // Convolve the filter coefficients with the memory
+        for (idx = 0; idx < MEMORY_LENGTH; idx++)
         {
-            throw std::runtime_error("Accelerator base class cannot be directly used.");
-        };
-        virtual void fillMemory(float last_value)
+            mem_idx  = (idx + lastMemoryIndex) % MEMORY_LENGTH;
+            sum     += filter[idx] * memory[mem_idx];
+        }
+
+        return sum;
+    }
+
+    void fillMemory(const float lastValue) { memory.fill(lastValue); }
+};
+
+class Holder : public Accelerator
+{
+  protected:
+    Accelerator* accelerator;
+    float        heldValue;
+
+  public:
+    Holder(const Accelerator* a)
+        : accelerator(a)
+    {
+        heldValue = 0;
+    }
+
+    virtual float getNextValue(const float forcing)
+    {
+        if (forcing != 0)
         {
-            throw std::runtime_error("Accelerator base class cannot be directly used.");
-        };
+            heldValue = accelerator->getNextValue(forcing);
+            return heldValue;
+        }
+
+        // Keep the child accelerator up to date
+        accelerator->getNextValue(forcing);
+        return heldValue;
     };
 
-    template <size_t len>
-    class SCurve : public Accelerator
+    virtual void fillMemory(const float lastValue)
     {
-    protected:
-        std::array<float, len> filter, memory;
-        size_t last_mem_idx;
+        heldValue = lastValue;
+        return accelerator->fillMemory(lastValue);
+    };
+};
 
-    public:
-        SCurve()
+class DerivativeLimiter : public Accelerator
+{
+  protected:
+    const float  limitPerMillisecond;
+    float        previousValue;
+    std::int64_t previousTime;
+
+  public:
+    DerivativeLimiter(const float tau_seconds)
+        : limitPerMillisecond(1.0 / (1000.0 * tau_seconds))
+    {
+        previousValue = 0;
+        previousTime  = 0;
+    }
+
+    virtual float getNextValue(const float forcing)
+    {
+        if (previousTime == 0)
         {
-            this->memory.fill(0);
-            this->last_mem_idx = 0;
-
-            // Build a filter to convolve with the input
-            float stepsize = 1.0f / len;
-            float filter_sum = 0;
-
-            for (size_t i = 0; i < len; i++)
-            {
-                if (i < len / 2)
-                    this->filter[i] = i * stepsize;
-                else
-                    this->filter[i] = 1 - (i * stepsize);
-                filter_sum += filter[i];
-            }
-            for (size_t i = 0; i < len; i++)
-            {
-                this->filter[i] /= filter_sum;
-            }
+            previousTime  = millis();
+            previousValue = forcing;
+            return forcing;
         }
-        float getNextValue(float forcing)
+        std::int64_t sampleTime = millis();
+        std::int64_t timeDelta  = sampleTime - previousTime;
+        previousTime            = sampleTime;
+
+        // This is inverted to make the math below work without division
+        float delta = forcing - previousValue;
+
+        float rate = delta / timeDelta;
+
+        if (rate > limitPerMillisecond)
         {
-            static float sum;
-            static size_t i, mem_idx;
-
-            // Append the memory with the new value
-            this->memory[this->last_mem_idx++] = forcing;
-            this->last_mem_idx %= len; // If we overflow, rotate back to the beginning
-
-            sum = 0;
-            // Convolve the filter coefficients with the memory
-            for (i = 0; i < len; i++)
-            {
-                mem_idx = (i + last_mem_idx) % len;
-                sum += filter[i] * memory[mem_idx];
-            }
-
-            return sum;
+            previousValue += timeDelta * limitPerMillisecond;
         }
-        void fillMemory(float last_value)
+        else if (rate < -limitPerMillisecond)
         {
-            this->memory.fill(last_value);
+            previousValue -= timeDelta * limitPerMillisecond;
         }
+        else
+        {
+            previousValue = forcing;
+        }
+        return previousValue;
     };
 
-    class Holder : public Accelerator
+    virtual void fillMemory(const float lastValue)
     {
-    protected:
-        Accelerator *accel;
-        float held;
-
-    public:
-        Holder(Accelerator *a) : accel(a)
-        {
-            held = 0;
-        }
-        virtual float getNextValue(float forcing)
-        {
-            if (forcing != 0)
-            {
-                held = accel->getNextValue(forcing);
-                return held;
-            }
-            // Keep the child accelerator up to date
-            accel->getNextValue(forcing);
-            return held;
-        };
-        virtual void fillMemory(float last_value)
-        {
-            held = last_value;
-            return accel->fillMemory(last_value);
-        };
+        previousValue = lastValue;
+        previousTime  = 0;
     };
+};
 
-    class DerivativeLimiter : public Accelerator
-    {
-    protected:
-        const float limit_per_ms;
-        float prev_val;
-        long long prevtime;
+// class NthOrderLimiter : public Accelerator {
+//  protected:
+//   const std::vector<float> limits;
+//   std::vector<float> memory;
+//   size_t order;
 
-    public:
-        DerivativeLimiter(float tau_seconds) : limit_per_ms(1.0 / (1000.0 * tau_seconds))
-        {
-            prev_val = 0;
-            prevtime = 0;
-        }
-        virtual float getNextValue(float forcing)
-        {
-            if (prevtime == 0)
-            {
-                prevtime = millis();
-                prev_val = forcing;
-                return forcing;
-            }
-            long long sample_time = millis();
-            long long dt = sample_time - prevtime;
-            prevtime = sample_time;
-
-            // This is inverted to make the math below work without division
-            float delta = forcing - prev_val;
-
-            float rate = delta / dt;
-
-            if (rate > this->limit_per_ms)
-                prev_val += dt * this->limit_per_ms;
-            else if (rate < -this->limit_per_ms)
-                prev_val -= dt * this->limit_per_ms;
-            else
-                prev_val = forcing;
-
-            return prev_val;
-        };
-        virtual void fillMemory(float last_value)
-        {
-            prev_val = last_value;
-            prevtime = 0;
-        };
-    };
-
-    // class NthOrderLimiter : public Accelerator {
-    //  protected:
-    //   const std::vector<float> limits;
-    //   std::vector<float> memory;
-    //   size_t order;
-
-    //  public:
-    //   NthOrderLimiter(std::vector<float> lim) : limits(lim) {
-    //     order = lim.size();
-    //     memory.resize(order);
-    //   }
-    //   virtual float getNextValue(float forcing) {
-    // }
-    //   virtual void fillMemory(float last_value) {
-    //   };
-    // };
+//  public:
+//   NthOrderLimiter(std::vector<float> lim) : limits(lim) {
+//     order = lim.size();
+//     memory.resize(order);
+//   }
+//   virtual float getNextValue(float forcing) {
+// }
+//   virtual void fillMemory(float last_value) {
+//   };
+// };
 
 }; // namespace acceleration
 #endif // End of include guard for ACCELERATION_HPP

@@ -3,31 +3,32 @@
 
 #include "acceleration.hpp"
 
-typedef enum
+enum MotorType_t
 {
     MT_UNKNOWN = 0,
     MT_ESC,
     /*MT_H_BRIDGE,*/
-} MotorType_t;
+};
 
-typedef struct
+struct Vector3
 {
     float x, y, z;
-} V3_t;
+};
 
-typedef struct
+struct R3_t
 {
     float r, p, y;
-} R3_t;
+};
 
-typedef struct
+struct Motor_t
 {
-    float power_limit;
-    V3_t dir;
-    R3_t angle;
-    float set_zero, set_delta;
+    float                      power_limit;
+    Vector3                    dir;
+    R3_t                       angle;
+    float                      set_zero;
+    float                      set_delta;
+    acceleration::Accelerator* accelerator;
     // MotorType_t type;
-    acceleration::Accelerator *accelerator;
-} Motor_t;
+};
 
 #endif /* end of include guard: MOTOR_MAPPER_MAIN */
