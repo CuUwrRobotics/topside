@@ -10,13 +10,14 @@
 
 #include "serial.hpp"
 
+#include <cstdarg>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <fcntl.h>
-#include <stdarg.h>
 #include <stdexcept>
+
+#include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -25,27 +26,27 @@
 
 namespace serial
 {
-int openSerialPort(const char* device, const int baud, int flags)
+int openSerialPort(const char* deviceName, const int baudRate, int ioFlags)
 {
-    struct termios options;
-    int            status, fd = open(device, flags);
+    struct ::termios options;
+    int              status, fileDescriptor = ::open(deviceName, ioFlags);
 
-    if (fd == -1)
+    if (fileDescriptor == -1)
     {
         return -1;
     }
 
-    fcntl(fd, F_SETFL, O_RDWR);
+    ::fcntl(fileDescriptor, F_SETFL, O_RDWR);
 
     // Get and modify current options:
 
-    tcgetattr(fd, &options);
+    ::tcgetattr(fileDescriptor, &options);
 
-    speed_t iobaud = convertSpeed(baud);
+    ::speed_t iobaud = convertSpeed(baudRate);
 
-    cfmakeraw(&options);
-    cfsetispeed(&options, iobaud);
-    cfsetospeed(&options, iobaud);
+    ::cfmakeraw(&options);
+    ::cfsetispeed(&options, iobaud);
+    ::cfsetospeed(&options, iobaud);
 
     options.c_cflag |= (CLOCAL | CREAD);
     options.c_cflag &= ~PARENB;
@@ -56,64 +57,65 @@ int openSerialPort(const char* device, const int baud, int flags)
     options.c_oflag &= ~OPOST;
 
     options.c_cc[VMIN]  = 0;
-    options.c_cc[VTIME] = 100; // Ten seconds (in hundreths)
+    options.c_cc[VTIME] = 100; // Ten seconds (in hundredths)
 
-    tcsetattr(fd, TCSANOW, &options);
+    ::tcsetattr(fileDescriptor, TCSANOW, &options);
 
-    ioctl(fd, TIOCMGET, &status);
+    ::ioctl(fileDescriptor, TIOCMGET, &status);
 
     status |= TIOCM_DTR;
     status |= TIOCM_RTS;
 
-    ioctl(fd, TIOCMSET, &status);
+    ::ioctl(fileDescriptor, TIOCMSET, &status);
 
-    usleep(10'000); // Wait 10ms for things to settle and configure
+    ::usleep(10000); // Wait 10ms for things to settle and configure
 
-    return fd;
+    return fileDescriptor;
 }
 
-void serialFlush(const int fd)
+void serialFlush(const int fileDescriptor)
 {
-    tcdrain(fd);
+    ::tcdrain(fileDescriptor);
 }
 
-void serialEmpty(const int fd, int mode)
+void serialEmpty(const int fileDescriptor, int mode)
 {
-    tcflush(fd, mode);
+    ::tcflush(fileDescriptor, mode);
 }
 
-void serialClose(const int fd)
+void serialClose(const int fileDescriptor)
 {
-    close(fd);
+    ::close(fileDescriptor);
 }
 
-void serialPutchar(const int fd, const unsigned char c)
+void serialPutchar(const int fileDescriptor, const unsigned char charToSend)
 {
-    write(fd, &c, 1);
+    constexpr std::size_t bytesToWrite = 1;
+    ::write(fileDescriptor, &charToSend, bytesToWrite);
 }
 
-void serialPuts(const int fd, const char* s)
+void serialPuts(const int fileDescriptor, const char* string)
 {
-    write(fd, s, strlen(s));
+    ::write(fileDescriptor, string, std::strlen(string));
 }
 
-void serialPrintf(const int fd, const char* message, ...)
+void serialPrintf(const int fileDescriptor, const char* message, ...)
 {
-    va_list argp;
-    char    buffer[OUTPUT_BUFFER_LENGTH];
+    ::va_list argp;
+    char      buffer[OUTPUT_BUFFER_LENGTH];
 
-    va_start(argp, message);
-    vsnprintf(buffer, OUTPUT_BUFFER_LENGTH - 1, message, argp);
-    va_end(argp);
+    ::va_start(argp, message);
+    ::vsnprintf(buffer, OUTPUT_BUFFER_LENGTH - 1, message, argp);
+    ::va_end(argp);
 
-    serialPuts(fd, buffer);
+    serialPuts(fileDescriptor, buffer);
 }
 
-int serialDataAvail(const int fd)
+int serialDataAvail(const int fileDescriptor)
 {
     int result;
 
-    if (ioctl(fd, FIONREAD, &result) == -1)
+    if (-1 == ::ioctl(fileDescriptor, FIONREAD, &result))
     {
         return -1;
     }
@@ -121,120 +123,122 @@ int serialDataAvail(const int fd)
     return result;
 }
 
-int serialGetchar(const int fd)
+int serialGetchar(const int fileDescriptor)
 {
-    uint8_t x;
+    std::uint8_t receivedChar;
 
-    if (read(fd, &x, 1) != 1)
+    if (-1 == ::read(fileDescriptor, &receivedChar, 1))
     {
         return -1;
     }
 
-    return ((int)x) & 0xFF;
+    return static_cast<int>(receivedChar) & 0xFF;
 }
 
-speed_t convertSpeed(const std::uint32_t baud)
+::speed_t convertSpeed(const std::uint32_t requestedBaudRate)
 {
-    speed_t baud_ioctl;
-    switch (baud)
+    ::speed_t baudRate;
+    switch (requestedBaudRate)
     {
     case 50:
-        baud_ioctl = B50;
+        baudRate = B50;
         break;
     case 75:
-        baud_ioctl = B75;
+        baudRate = B75;
         break;
     case 110:
-        baud_ioctl = B110;
+        baudRate = B110;
         break;
     case 134:
-        baud_ioctl = B134;
+        baudRate = B134;
         break;
     case 150:
-        baud_ioctl = B150;
+        baudRate = B150;
         break;
     case 200:
-        baud_ioctl = B200;
+        baudRate = B200;
         break;
     case 300:
-        baud_ioctl = B300;
+        baudRate = B300;
         break;
     case 600:
-        baud_ioctl = B600;
+        baudRate = B600;
         break;
-    case 1'200:
-        baud_ioctl = B1200;
+    case 1200:
+        baudRate = B1200;
         break;
-    case 1'800:
-        baud_ioctl = B1800;
+    case 1800:
+        baudRate = B1800;
         break;
-    case 2'400:
-        baud_ioctl = B2400;
+    case 2400:
+        baudRate = B2400;
         break;
-    case 4'800:
-        baud_ioctl = B4800;
+    case 4800:
+        baudRate = B4800;
         break;
-    case 9'600:
-        baud_ioctl = B9600;
+    case 9600:
+        baudRate = B9600;
         break;
-    case 19'200:
-        baud_ioctl = B19200;
+    case 19200:
+        baudRate = B19200;
         break;
-    case 38'400:
-        baud_ioctl = B38400;
+    case 38400:
+        baudRate = B38400;
         break;
-    case 57'600:
-        baud_ioctl = B57600;
+    case 57600:
+        baudRate = B57600;
         break;
-    case 115'200:
-        baud_ioctl = B115200;
+    case 115200:
+        baudRate = B115200;
         break;
-    case 230'400:
-        baud_ioctl = B230400;
+    case 230400:
+        baudRate = B230400;
         break;
-    case 460'800:
-        baud_ioctl = B460800;
+    case 460800:
+        baudRate = B460800;
         break;
-    case 500'000:
-        baud_ioctl = B500000;
+    case 500000:
+        baudRate = B500000;
         break;
-    case 576'000:
-        baud_ioctl = B576000;
+    case 576000:
+        baudRate = B576000;
         break;
-    case 921'600:
-        baud_ioctl = B921600;
+    case 921600:
+        baudRate = B921600;
         break;
-    case 1'000'000:
-        baud_ioctl = B1000000;
+    case 1000000:
+        baudRate = B1000000;
         break;
-    case 1'152'000:
-        baud_ioctl = B1152000;
+    case 1152000:
+        baudRate = B1152000;
         break;
-    case 1'500'000:
-        baud_ioctl = B1500000;
+    case 1500000:
+        baudRate = B1500000;
         break;
-    case 2'000'000:
-        baud_ioctl = B2000000;
+    case 2000000:
+        baudRate = B2000000;
         break;
-    case 2'500'000:
-        baud_ioctl = B2500000;
+    case 2500000:
+        baudRate = B2500000;
         break;
-    case 3'000'000:
-        baud_ioctl = B3000000;
+    case 3000000:
+        baudRate = B3000000;
         break;
-    case 3'500'000:
-        baud_ioctl = B3500000;
+    case 3500000:
+        baudRate = B3500000;
         break;
-    case 4'000'000:
-        baud_ioctl = B4000000;
+    case 4000000:
+        baudRate = B4000000;
         break;
 
     default:
-        char buffer[256];
-        sprintf(buffer, "Could not find baud constant for rate %d.", baud);
-        throw std::runtime_error(buffer);
+        std::string errorMessage
+            = "Could not find baud rate constant for requested rate ";
+        errorMessage = std::to_string(requestedBaudRate);
+        throw std::runtime_error(errorMessage);
     }
-    return baud_ioctl;
+
+    return baudRate;
 }
 
 }; // namespace serial

@@ -1,9 +1,8 @@
-
-#ifndef ACCELERATION_HPP
-#define ACCELERATION_HPP
+#pragma once
 
 #include <ros/ros.h>
 
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -41,61 +40,60 @@ template<std::size_t MEMORY_LENGTH>
 class SCurve : public Accelerator
 {
   protected:
-    std::array<float, MEMORY_LENGTH> filter;
-    std::array<float, MEMORY_LENGTH> memory;
-    std::size_t                      lastMemoryIndex;
+    std::array<float, MEMORY_LENGTH> p_Filter;
+    std::array<float, MEMORY_LENGTH> p_Memory;
+    std::size_t                      p_LastMemoryIndex;
 
   public:
     SCurve()
     {
-        memory.fill(0);
-        lastMemoryIndex = 0;
+        p_Memory.fill(0);
+        p_LastMemoryIndex = 0;
 
         // Build a filter to convolve with the input
         float stepSize  = 1.0f / MEMORY_LENGTH;
-        float filterSum = 0;
+        float filterSum = 0.0f;
 
         for (std::size_t idx = 0; idx < MEMORY_LENGTH; idx++)
         {
             if (idx < MEMORY_LENGTH / 2)
             {
-                filter[idx] = idx * stepSize;
+                p_Filter[idx] = idx * stepSize;
             }
             else
             {
-                filter[idx] = 1 - (idx * stepSize);
+                p_Filter[idx] = 1 - (idx * stepSize);
             }
-            filterSum += filter[idx];
+            filterSum += p_Filter[idx];
         }
         for (std::size_t idx = 0; idx < MEMORY_LENGTH; idx++)
         {
-            filter[idx] /= filterSum;
+            p_Filter[idx] /= filterSum;
         }
     }
 
     float getNextValue(const float forcing)
     {
-        static float       sum;
-        static std::size_t idx;
-        static std::size_t mem_idx;
+        static float       checksum;
+        static std::size_t memoryIndex;
 
         // Append the memory with the new value
-        memory[lastMemoryIndex++] = forcing;
-        lastMemoryIndex
+        p_Memory[p_LastMemoryIndex++] = forcing;
+        p_LastMemoryIndex
             %= MEMORY_LENGTH; // If we overflow, rotate back to the beginning
 
-        sum = 0;
+        checksum = 0;
         // Convolve the filter coefficients with the memory
-        for (idx = 0; idx < MEMORY_LENGTH; idx++)
+        for (std::size_t idx = 0; idx < MEMORY_LENGTH; idx++)
         {
-            mem_idx  = (idx + lastMemoryIndex) % MEMORY_LENGTH;
-            sum     += filter[idx] * memory[mem_idx];
+            memoryIndex  = (idx + p_LastMemoryIndex) % MEMORY_LENGTH;
+            checksum    += p_Filter[idx] * p_Memory[memoryIndex];
         }
 
-        return sum;
+        return checksum;
     }
 
-    void fillMemory(const float lastValue) { memory.fill(lastValue); }
+    void fillMemory(const float lastValue) { p_Memory.fill(lastValue); }
 };
 
 class Holder : public Accelerator
@@ -203,4 +201,3 @@ class DerivativeLimiter : public Accelerator
 // };
 
 }; // namespace acceleration
-#endif // End of include guard for ACCELERATION_HPP

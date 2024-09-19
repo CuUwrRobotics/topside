@@ -1,5 +1,4 @@
-#ifndef MOTOR_MAPPER_MAIN
-#define MOTOR_MAPPER_MAIN
+#pragma once
 
 /**
  * @brief A class implementing a filter which removes the DC component of a
@@ -34,7 +33,7 @@
  *
  * # Filter Coefficient
  *
- * A higher value of r will result in a less aggressive filter. More agressive
+ * A higher value of r will result in a less aggressive filter. More aggressive
  * filters will remove DC with a smaller time constant, but will also attenuate
  * more at low frequencies. Common values for r range from 0.90 to 0.999.
  *
@@ -98,4 +97,3 @@ class DcBlockingFilter
     }
 };
 
-#endif /* end of include guard: MOTOR_MAPPER_MAIN */

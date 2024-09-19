@@ -1,9 +1,7 @@
-#ifndef PID_HPP
-#define PID_HPP
-
-#include <stdio.h>
+#pragma once
 
 #include <algorithm>
+#include <cstdio>
 #include <functional>
 #include <numeric>
 #include <vector>
@@ -174,4 +172,3 @@ class pid
 //   }
 // }
 
-#endif // end of PID_HPP

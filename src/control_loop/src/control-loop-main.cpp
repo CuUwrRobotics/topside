@@ -1,19 +1,23 @@
-// System includes
 #define _USE_MATH_DEFINES
+
+// Standard includes
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 
 // ROS includes
+#include <ros/ros.h>
+#include <std_msgs/Float32.h>
+
+// Project Includes
+#include "control-loop-main.hpp"
+#include "pid.hpp"
+
+// Custom Messages
 #include <custom_msgs/EulerMotion.h>
 #include <custom_msgs/Lockout.h>
 #include <custom_msgs/MotorControls.h>
 #include <custom_msgs/ResetMotors.h>
-#include <ros/ros.h>
-#include <std_msgs/Float32.h>
-
-#include "control-loop-main.hpp"
-#include "pid.hpp"
 
 using custom_msgs::EulerMotion = VecWithCurl;
 

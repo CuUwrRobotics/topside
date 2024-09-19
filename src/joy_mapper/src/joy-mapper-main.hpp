@@ -1,5 +1,4 @@
-#ifndef JOY_MAPPER_MAIN
-#define JOY_MAPPER_MAIN
+#pragma once
 
 // typedef enum {
 //   MS_STOPPED = 0,
@@ -16,5 +15,3 @@ struct Joystick_t
 
 using JoyButton_t  = bool;
 using JoyTrigger_t = float;
-
-#endif /* end of include guard: JOY_MAPPER_MAIN */

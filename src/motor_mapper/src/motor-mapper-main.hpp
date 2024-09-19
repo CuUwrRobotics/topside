@@ -1,9 +1,8 @@
-#ifndef MOTOR_MAPPER_MAIN
-#define MOTOR_MAPPER_MAIN
+#pragma once
 
 #include "acceleration.hpp"
 
-enum MotorType_t
+enum class MotorType_t
 {
     MT_UNKNOWN = 0,
     MT_ESC,
@@ -12,12 +11,16 @@ enum MotorType_t
 
 struct Vector3
 {
-    float x, y, z;
+    float x;
+    float y;
+    float z;
 };
 
 struct R3_t
 {
-    float r, p, y;
+    float roll;
+    float pitch;
+    float yaw;
 };
 
 struct Motor_t
@@ -31,4 +34,3 @@ struct Motor_t
     // MotorType_t type;
 };
 
-#endif /* end of include guard: MOTOR_MAPPER_MAIN */

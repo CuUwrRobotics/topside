@@ -1,5 +1,4 @@
-#ifndef LOCKOUT_HPP
-#define LOCKOUT_HPP
+#pragma once
 
 #include <ros/ros.h>
 
@@ -104,5 +103,3 @@ class LockoutStateMachine
         return m_State < 0;
     }
 };
-
-#endif // End of include guard for LOCKOUT_HPP

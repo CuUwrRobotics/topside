@@ -1,5 +1,4 @@
-#ifndef ROV_COMMS_CONTROLLER_HPP
-#define ROV_COMMS_CONTROLLER_HPP
+#pragma once
 
 #include <cstdint>
 #include <cstdio>
@@ -29,20 +28,20 @@ class RovCommsController
     void sendChecksum();
 
   public:
-    RovCommsController(const int          ser,
-                       const std::uint8_t cipo,
-                       const std::uint8_t copi)
-        : COMMS_HANDSHAKE((cipo * copi) & 0xFF),
-          CIPO_BUFFER_LENGTH(cipo),
-          COPI_BUFFER_LENGTH(copi),
-          cipo_checksum(0),
-          copi_checksum(0),
-          copi_index(0),
-          cipo_index(0),
-          read_buffer_index(0),
-          cipo_checksum_status(false),
-          read_buffer(cipo),
-          m_SerialFileDescriptor(ser) {};
+    RovCommsController(const int          serialFileDescriptor,
+                       const std::uint8_t cipoBufferLength,
+                       const std::uint8_t copiBufferLength)
+        : COMMS_HANDSHAKE((cipoBufferLength * copiBufferLength) & 0xFF),
+          CIPO_BUFFER_LENGTH(cipoBufferLength),
+          COPI_BUFFER_LENGTH(copiBufferLength),
+          m_CipoChecksum(0),
+          m_CopiChecksum(0),
+          m_CopiIndex(0),
+          m_CipoIndex(0),
+          m_ReadBufferIndex(0),
+          m_CipoChecksumStatus(false),
+          m_ReadBuffer(cipoBufferLength),
+          m_SerialFileDescriptor(serialFileDescriptor) {};
 
     inline int getFileDescriptor() { return m_SerialFileDescriptor; };
 
@@ -82,9 +81,12 @@ class RovCommsController
      * @tparam T The type of data to send.
      * @param data The data to send.
      */
-    template<typename T> void send(const T& data)
+    template<typename T>
+    void send(const T& data)
     {
-        this->sendBlocks((std::uint8_t*)&data, sizeof(T));
+        std::uint8_t dataBytes[sizeof(T)];
+        std::memcpy(dataBytes, &data, sizeof(T));
+        this->sendBlocks(dataBytes, sizeof(T));
     }
 
     /**
@@ -148,7 +150,8 @@ class RovCommsController
      * @tparam T The type of data to pop.
      * @return The data at the read buffer index.
      */
-    template<typename T> T popReadBuffer()
+    template<typename T>
+    T popReadBuffer()
     {
         T data             = *(T*)&read_buffer[m_ReadBufferIndex];
         m_ReadBufferIndex += sizeof(T);
@@ -157,11 +160,9 @@ class RovCommsController
             ROS_ERROR(
                 "Read buffer overflow in RovCommsController::popReadBuffer()");
             m_ReadBufferIndex = 0;
-            exit(EXIT_FAILURE);
+            std::exit(EXIT_FAILURE);
         }
         return data;
     }
 
 }; // class RovCommsController
-
-#endif // End of include guard for ROV_COMMS_CONTROLLER_HPP

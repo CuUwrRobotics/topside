@@ -1,7 +1,7 @@
-#ifndef MPU6050_PROCESSOR_HPP
-#define MPU6050_PROCESSOR_HPP
+#pragma once
 
 #include <cstdint>
+
 #include <custom_msgs/EulerMotion.h>
 
 struct Vector3D
@@ -36,4 +36,3 @@ struct Quaternion3D
 
 custom_msgs::EulerMotion processMpu6050Data(std::uint8_t raw_buffer[]);
 
-#endif // End of include guard for MPU6050_PROCESSOR_HPP

@@ -1,6 +1,7 @@
 #include "rov-comms.hpp"
 
 #include <cstdint>
+#include <cstdio>
 #include <stdexcept>
 
 void RovCommsController::awaitHandshake()
@@ -15,24 +16,25 @@ void RovCommsController::awaitHandshake()
         // Try sending the handshake command
         // NOTE: This is doing double duty, since it's also what clears the
         // arduino's serial buffer if it's waiting for data in COPI mode
-        printf(".");
-        fflush(stdout);
+        std::printf(".");
+        std::fflush(stdout);
         serial::serialPutchar(m_SerialFileDescriptor, COMMS_HANDSHAKE);
         serial::serialFlush(m_SerialFileDescriptor);
 
         // I chose 50ms since the timestamp does a roundtrip within about 20ms.
+        // Aside from Cary: 100ms?
         ros::Duration(0.1).sleep();
     }
-    printf("\n");
+    std::printf("\n");
 
     std::uint32_t timestamp = 0;
 
-    for (int i = 0; i < 4 && ros::ok(); i++)
+    for (std::size_t idx = 0; idx < 4 && ros::ok(); idx++)
     {
         while ((serial::serialDataAvail(m_SerialFileDescriptor) == 0)
                && ros::ok())
             ; // Wait for more data
-        timestamp |= serial::serialGetchar(m_SerialFileDescriptor) << (i * 8);
+        timestamp |= serial::serialGetchar(m_SerialFileDescriptor) << (idx * 8);
     }
 
     if (!ros::ok())
@@ -40,10 +42,10 @@ void RovCommsController::awaitHandshake()
         throw std::runtime_error("ros::ok() false while awaiting handshake.");
     }
 
-    for (int i = 0; i < 4; i++)
+    for (std::size_t idx = 0; idx < 4; idx++)
     {
         serial::serialPutchar(m_SerialFileDescriptor,
-                              (timestamp >> (i * 8)) & 0xFF);
+                              (timestamp >> (idx * 8)) & 0xFF);
     }
     ROS_INFO("Handshake completed (timestamp %d)", timestamp);
 }
@@ -56,7 +58,7 @@ void RovCommsController::sendChecksum()
     m_CopiChecksum = 0;
 }; // sendChecksum
 
-void RovCommsController::sendBlock(uint8_t data)
+void RovCommsController::sendBlock(std::uint8_t data)
 {
     m_CopiChecksum += data;
     serial::serialWrite(m_SerialFileDescriptor, data);
@@ -76,9 +78,9 @@ void RovCommsController::sendBlock(uint8_t data)
 void RovCommsController::sendBlocks(const std::uint8_t data[],
                                     const std::size_t  length)
 {
-    for (size_t i = 0; i < length; i++)
+    for (std::size_t idx = 0; idx < length; idx++)
     {
-        this->sendBlock(data[i]);
+        this->sendBlock(data[idx]);
     }
 }; // sendBlocks
 
@@ -120,7 +122,7 @@ int RovCommsController::tryReadingData()
     return m_CipoIndex;
 }; // readBlocks
 
-uint8_t* RovCommsController::popReadBuffer(size_t length)
+std::uint8_t* RovCommsController::popReadBuffer(std::size_t length)
 {
     std::uint8_t* data  = &read_buffer[m_ReadBufferIndex];
     m_ReadBufferIndex  += length;
@@ -129,7 +131,7 @@ uint8_t* RovCommsController::popReadBuffer(size_t length)
         ROS_ERROR(
             "Read buffer overflow in RovCommsController::popReadBuffer()");
         m_ReadBufferIndex = 0;
-        exit(EXIT_FAILURE);
+        std::exit(EXIT_FAILURE);
     }
     return data;
 }
@@ -142,7 +144,7 @@ std::uint8_t RovCommsController::popReadBuffer()
         ROS_ERROR(
             "Read buffer overflow in RovCommsController::popReadBuffer()");
         m_ReadBufferIndex = 0;
-        exit(EXIT_FAILURE);
+        std::exit(EXIT_FAILURE);
     }
     return data;
 }
